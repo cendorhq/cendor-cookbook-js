@@ -1,0 +1,17 @@
+{
+  "name": "cendor-recipe-deterministic-assembly",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - byte-identical assembly is what makes a replay mean anything (combo, JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/contextkit": "^3.0.1",
+    "@cendor/core": "^3.1.0"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "cendor-recipe-record-a-governed-run",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - record the governed triad, replay it for $0 (combo, JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/acttrace": "^3.1.0",
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.1.0",
+    "@cendor/tokenguard": "^3.0.2"
+  }
+}

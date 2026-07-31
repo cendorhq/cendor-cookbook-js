@@ -1,0 +1,15 @@
+{
+  "name": "cendor-recipe-core-seams",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - trace(), addStreamObserver() and tokens.register() (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/core": "^3.1.0"
+  }
+}

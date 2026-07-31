@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ["20", "22"]
-        category: [quickstarts, sdk, agents]
+        category: [quickstarts, sdk, agents, combos, libs]
     name: ${{ matrix.category }} (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     defaults:

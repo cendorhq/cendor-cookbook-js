@@ -27,3 +27,67 @@ updates:
     directory: /recipes/agents/m365-custom-engine-js
     schedule: { interval: weekly }
     commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/combos/context-under-budget
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/combos/compress-and-restore
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/combos/record-a-governed-run
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/combos/break-midstream-audited
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/combos/block-before-record
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/combos/deterministic-assembly
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/tokenguard-hard-vs-runaway
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/tokenguard-durable-spend
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/contextkit-eviction-receipt
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/contextkit-plug-a-compressor
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/squeeze-four-compressors
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/squeeze-persist-and-restore
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/cassette-four-modes
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/cassette-semantic-drift
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/acttrace-custom-detector
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/libs/core-seams
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
