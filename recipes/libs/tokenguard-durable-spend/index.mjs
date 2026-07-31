@@ -5,17 +5,16 @@
  * process and the month's spend is gone. A SINK persists each row as it happens — but the bus fans
  * out to subscribers INLINE, so a naive durable sink adds its I/O latency to every single model call.
  *
- * A sink is core's `Sink` protocol and nothing more: `write(entry)`, plus optional `flush()` /
- * `close()`. That is small enough to show whole, so this recipe builds both halves:
+ * `QueueSink` decouples that: `write()` enqueues and returns immediately, while one background worker
+ * drains the queue into the inner sink IN ORDER, with bounded back-pressure and drop accounting.
  *
- *   JsonlSink    the durable half — append one JSON line per spend row
- *   OffHotPath   the decoupling half — enqueue and return; drain in the background, IN ORDER
+ *     useSink(new QueueSink(mySink))
  *
- * `@cendor/tokenguard/sinks` ships `QueueSink`, which is the second half done properly (bounded
- * back-pressure, drop accounting, an idle handshake). ⚠️ See the README: on `@cendor/tokenguard`
- * 3.0.2 that subpath cannot be imported at all unless the optional native `better-sqlite3` installed,
- * which it does not on Node 20 / linux-x64 — so this recipe stays on its own 15 lines until the fix
- * ships. Swap `OffHotPath` for `QueueSink` then; the shape is the same.
+ * The inner sink is core's `Sink` protocol and nothing more — `write(entry)`, plus optional `flush()`
+ * / `close()` — small enough to show whole, so this recipe writes its own JSONL one rather than using
+ * the bundled `SQLiteSink` (see the README: that one needs the optional native `better-sqlite3`, which
+ * has no prebuilt binary for Node 20 on linux-x64, and a copy-paste recipe should not need a C++
+ * toolchain).
  *
  * The same bus carries BudgetEvents — the only signal a BLOCKED call leaves, because a call refused
  * pre-flight never becomes an LLMCall and so never reaches a sink at all.
@@ -27,11 +26,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bus, instrument } from '@cendor/core';
 import { BudgetEvent, BudgetExceeded, report, reset, track, useSink, withBudget } from '@cendor/tokenguard';
+import { QueueSink } from '@cendor/tokenguard/sinks';
 
 const MODEL = 'gpt-4o';
 
 /**
- * The durable half. Each spend row arrives as
+ * The durable inner sink. Each spend row arrives as
  * `{ tags, usd, input_tokens, output_tokens, reasoning_tokens, model }` — and `usd` is the Decimal
  * as a STRING, never a float, so appending it to a file loses no precision.
  */
@@ -44,29 +44,6 @@ class JsonlSink {
     appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
   }
   close() {} // nothing to release; a socket-backed sink would disconnect here
-}
-
-/** The decoupling half: enqueue and return, drain in the background, preserve order. */
-class OffHotPath {
-  constructor(inner) {
-    this.inner = inner;
-    this.queue = [];
-    this.draining = null;
-  }
-  write(entry) {
-    this.queue.push(entry); // returns immediately — the model call does not wait on I/O
-    this.draining ??= Promise.resolve().then(() => {
-      while (this.queue.length > 0) this.inner.write(this.queue.shift());
-      this.draining = null;
-    });
-  }
-  async flush() {
-    while (this.draining) await this.draining; // the durability handshake
-  }
-  async close() {
-    await this.flush();
-    this.inner.close?.();
-  }
 }
 
 function fakeOpenAI() {
@@ -93,7 +70,7 @@ const watch = (event) => {
 };
 bus.subscribe(watch);
 
-const sink = new OffHotPath(new JsonlSink(file));
+const sink = new QueueSink(new JsonlSink(file));
 const previous = useSink(sink);
 try {
   for (const tenant of ['acme', 'acme', 'globex']) {
@@ -114,7 +91,7 @@ try {
   } catch (err) {
     if (!(err instanceof BudgetExceeded)) throw err;
   }
-  await sink.flush();
+  await sink.flush(); // block until the worker has drained — the durability handshake
 } finally {
   useSink(previous);
   await sink.close();
@@ -132,10 +109,10 @@ for (const r of rows) {
 }
 console.log(`in-memory report : acme $${inMemory.acme.usd.amount.toString()} over ${inMemory.acme.calls} calls, globex $${inMemory.globex.usd.amount.toString()}`);
 console.log(`budget events    : ${blocked.length} - action='${last.action}', cap=${last.capTokens} tokens (a blocked call emits no LLMCall, so this is the ONLY signal)`);
-console.log('shutdown         : flush() drained the queue before close() - a background drainer would otherwise leave rows unwritten on an abrupt exit');
+console.log('shutdown         : flush() drained the queue before close() - a background worker would otherwise leave rows unwritten on an abrupt exit');
 
 if (rows.length !== 3) throw new Error('one persisted row per call that actually happened');
 if (blocked.length !== 1 || last.action !== 'blocked') throw new Error('the block was not on the bus');
 if (!rows.every((r) => 'tenant' in r.tags)) throw new Error('track() tags did not reach the sink');
 if (rows.some((r) => typeof r.usd !== 'string')) throw new Error('usd must reach a sink as a Decimal string');
-if (rows[2].tags.tenant !== 'globex') throw new Error('the drainer did not preserve write order');
+if (rows[2].tags.tenant !== 'globex') throw new Error('QueueSink did not preserve write order');

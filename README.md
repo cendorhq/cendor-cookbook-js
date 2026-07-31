@@ -111,12 +111,13 @@ shapes differ where the language does: `trace(id, fn)` is a callback in TypeScri
 async, `withBudget(cfg, cb)` is the scope form (never `budget(cfg, fn)`), and a stream is aborted by
 **IteratorClose** (`return()`) rather than Python's `close()`.
 
-⚠️ One further constraint, found by writing these recipes: on **`@cendor/tokenguard` 3.0.2 the whole
-`@cendor/tokenguard/sinks` subpath cannot be imported** when the optional `better-sqlite3` was skipped
-at install time — a value import of it at module scope took `QueueSink` and `OTelSink` down with
-`SQLiteSink`. Fixed in `cendor-libs-js` (lazy `createRequire`, pinned by a regression test) and
-awaiting release as **3.0.3**; until then `libs/tokenguard-durable-spend` hand-rolls the queue and
-explains why.
+✅ One constraint **found by writing these recipes and since fixed**: on `@cendor/tokenguard` 3.0.2 the
+whole `@cendor/tokenguard/sinks` subpath could not be imported when the optional `better-sqlite3` was
+skipped at install time — a value import of it at module scope took `QueueSink` and `OTelSink` down
+with `SQLiteSink`, *after a successful `npm install`*. Fixed in **3.1.0** (lazy `createRequire`, pinned
+by a regression test with a negative control), verified on the published package in a clean
+`node:20-slim` container: the subpath imports, `QueueSink` works, and `SQLiteSink` throws only when
+you actually construct one. `libs/tokenguard-durable-spend` uses the real `QueueSink`.
 
 ## Contributing
 
