@@ -93,7 +93,7 @@ const HISTORY_PROP = 'cendorHistory';
  *
  *   import OpenAI from 'openai';
  *   return instrument(new OpenAI());        // or new Anthropic()
- *   // Azure AI Foundry — the same client on the v1 GA endpoint (no apiVersion):
+ *   // Microsoft Foundry (formerly Azure AI Foundry) — same client, v1 GA endpoint (no apiVersion):
  *   return instrument(new OpenAI({
  *     baseURL: `${process.env.AZURE_OPENAI_ENDPOINT.replace(/\/+$/, '')}/openai/v1/`,
  *     apiKey: process.env.AZURE_OPENAI_API_KEY }));
