@@ -1,0 +1,13 @@
+{
+  "name": "cendor-cookbook-js",
+  // Node 22 — the newest version in the CI matrix. The matrix (20 + 22) is what proves the LTS;
+  // the devcontainer just needs one working toolchain, and an unambiguous one is the whole reason
+  // this repo is separate from the Python cookbook.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postAttachCommand": "echo 'Pick a recipe and run it:  cd recipes/quickstarts/core-js && npm install && node index.mjs'",
+  "customizations": {
+    "vscode": {
+      "extensions": ["biomejs.biome", "dbaeumer.vscode-eslint"]
+    }
+  }
+}

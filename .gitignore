@@ -1,0 +1,30 @@
+# Private working material — NEVER committed (this repo is public).
+plan/
+
+# Node
+node_modules/
+# npm lockfiles: deliberately not committed — every recipe pins `@cendor/*` RANGES so `npm install`
+# re-resolves the current shipped minor on each CI run. Drift then shows up as a red job instead of
+# being frozen into a lockfile nobody re-reads. (Same rule as the Python cookbook's uv.lock.)
+package-lock.json
+npm-debug.log*
+.npm/
+
+# Build output (no recipe compiles today — recipes are plain .mjs run by node — but a future
+# TypeScript-source recipe would land here).
+dist/
+*.tsbuildinfo
+
+# Secrets & local config — recipes run offline with NO key; never commit one.
+.env
+*.env
+
+# Cassettes recorded locally are generated artifacts, not fixtures. (Committed fixtures live under
+# a recipe's own fixtures/ dir and are added explicitly.)
+**/_recordings/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.log

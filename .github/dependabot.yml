@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Keep the CI GitHub Actions on current pinned versions.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # ONE ENTRY PER RECIPE DIRECTORY. There is no workspace and no lockfile here — each recipe pins the
+  # published @cendor/* packages directly, so this file is the only thing watching them. This is the
+  # drift class that rots SILENTLY GREEN: a caret pin resolves only within its major, so a stale pin
+  # keeps CI passing on an old shelf while the recipe stops teaching what is published.
+  #
+  # ⚠️ A NEW RECIPE NEEDS A NEW ENTRY HERE. Nothing globs directories in dependabot v2.
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/core-js
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/sdk/governed-agent-js
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/agents/m365-custom-engine-js
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }

@@ -1,0 +1,76 @@
+name: Recipe request or improvement
+description: Suggest a new recipe, or an improvement to an existing one.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A recipe earns its place by proving something real **and running green offline, with no API
+        key**. The bar is in [`CONTRIBUTING.md`](https://github.com/cendorhq/cendor-cookbook-js/blob/main/CONTRIBUTING.md):
+        a `README.md` (the pain → what it shows → the run command → the expected-output money shot), a
+        `package.json` with the recipe's own pins, and an `index.mjs` of roughly 80 lines or fewer,
+        driven by a fake provider-shaped client or a recorded `cassette` fixture.
+
+        **Python recipe?** That belongs in
+        [cendor-cookbook](https://github.com/cendorhq/cendor-cookbook/issues) — the two cookbooks are
+        twins, one repo per toolchain.
+
+        Wanting a **library feature** rather than a recipe? That belongs on
+        [cendor-libs-js](https://github.com/cendorhq/cendor-libs-js/issues) or
+        [cendor-sdk-js](https://github.com/cendorhq/cendor-sdk-js/issues).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is this?
+      options:
+        - A new recipe
+        - An improvement to an existing recipe
+        - A new category
+        - A TypeScript twin for a Python recipe that has none
+        - Docs / README
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Which category does it belong in?
+      options:
+        - quickstarts
+        - sdk
+        - agents
+        - combos
+        - libs
+        - A new category
+    validations:
+      required: true
+  - type: textarea
+    id: pain
+    attributes:
+      label: The pain
+      description: Two or three lines in a developer's own words — the problem someone would go looking for this recipe to solve.
+    validations:
+      required: true
+  - type: textarea
+    id: shows
+    attributes:
+      label: What would the recipe show?
+      description: Which Cendor libraries, composed how — and what the money shot is (the exact line it prints that proves the point).
+    validations:
+      required: true
+  - type: input
+    id: framework
+    attributes:
+      label: Any framework, host, or provider SDK involved?
+      description: It goes in the recipe's own package.json, with a caret range — there is no shared dependency graph here, so one framework's breaking release can only turn its own recipe red.
+      placeholder: the Microsoft 365 Agents SDK, express, zod, none
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Fit with the recipe standard
+      options:
+        - label: It can run **offline** — no API key, no provider network call — with a fake provider-shaped client or a committed cassette fixture.
+        - label: It runs on **Node 20 and 22**, not just the newest Node.
+        - label: No invented numbers. Any cost printed comes from `prices.estimate(...)` on stated token counts, and money is `decimal.js`, never a float.
+        - label: It composes libraries only through the documented seams (`instrument()`, the `@cendor/core` bus, protocols).
+        - label: It describes a framework as *working alongside* Cendor — never an "official integration".
+        - label: If the capability is Python-only, I am asking for a **documented omission**, not a TypeScript sample that does not really work.

@@ -1,0 +1,90 @@
+name: Bug report
+description: A recipe does not run, or does not print what its README says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **This repo publishes nothing** — it is a set of copy-paste TypeScript
+        recipes, so a bug here is almost always *"a recipe does not run"* or *"the output does not
+        match its README"*.
+
+        > **Every recipe runs OFFLINE, with no API key and no network call to a model provider.** CI has
+        > no secrets, by design. So if a recipe asks you for a key, or tries to reach a provider, that
+        > is a **bug in the recipe** — not a prerequisite you are missing. Please file it.
+
+        Routing:
+
+        - **Security vulnerability?** Do not open a public issue — report it privately through
+          [GitHub Private Vulnerability Reporting](https://github.com/cendorhq/cendor-cookbook-js/security/advisories/new)
+          (details in [`SECURITY.md`](https://github.com/cendorhq/cendor-cookbook-js/blob/main/SECURITY.md)).
+          A recipe that teaches an unsafe pattern, or a fixture with a leaked credential, counts.
+        - **Looking for the Python twin?** It lives in
+          [cendor-cookbook](https://github.com/cendorhq/cendor-cookbook) — the two cookbooks are twins,
+          same folder names, one repo per toolchain.
+        - **Is the flaw in a *library*, rather than in how the recipe drives it?** File it on
+          [cendor-libs-js](https://github.com/cendorhq/cendor-libs-js/issues) or
+          [cendor-sdk-js](https://github.com/cendorhq/cendor-sdk-js/issues) — but if you are unsure,
+          file here and we will route it.
+  - type: input
+    id: recipe
+    attributes:
+      label: Which recipe?
+      description: The folder path, please — those names are an API the cendor.ai /cookbook page deep-links to.
+      placeholder: recipes/libs/tokenguard-durable-spend
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - quickstarts
+        - sdk
+        - agents
+        - combos
+        - libs
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: The exact command you ran
+      placeholder: cd recipes/quickstarts/core-js && npm install && node index.mjs
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Node version, npm version, and OS
+      description: CI runs Node 20 and 22. If it only fails on a Node outside that range, say so — that is useful either way.
+      placeholder: Node 22.14.0, npm 10.9.2, Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: resolved
+    attributes:
+      label: Which @cendor versions resolved?
+      description: Recipes pin caret *ranges* that re-resolve on every `npm install`, so a fresh library release can change behavior. Run `npm ls @cendor/core` inside the recipe folder.
+      placeholder: "@cendor/core 3.1.0, @cendor/tokenguard 3.0.2"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect (the README's expected-output "money shot"), and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: The full output
+      description: Everything the command printed, including the stack trace or the npm resolver error.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I ran it with **no API key set** in the environment — that is the supported path, and needing a key is itself a bug.
+        - label: I ran `npm install` from inside the recipe directory, as its README shows (there is no workspace here — each recipe installs its own pins).
+        - label: This is not a security vulnerability (those go through private reporting, linked above).

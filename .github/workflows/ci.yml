@@ -1,0 +1,87 @@
+name: CI
+
+# Every job runs the recipes OFFLINE against the published @cendor/* npm packages. There are NO
+# secrets configured in this repo — a recipe that needs a key to go green does not belong here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly re-resolve within the caret ranges, to catch dependency drift (a new @cendor minor, a
+  # new framework release) before users do. Nothing here is locked, so this is the drift alarm.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  recipes:
+    # D4 — SHARDED BY CATEGORY, with a PER-RECIPE `npm install`. The per-recipe install is the
+    # point: it is what proves a copy-pasteable package.json actually resolves on its own, which a
+    # workspace install would hide. Sharding by category keeps wall-clock flat as the tree grows.
+    #
+    # Each shard LOOPS over its category directory rather than naming recipes, so a new recipe is
+    # covered the moment it lands. A new *category* still needs a matrix row — which is exactly what
+    # the `coverage` job below refuses to let you forget.
+    #
+    # Node 20 AND 22 are in the matrix on purpose: AsyncLocalStorage behaves differently on
+    # legacy-ALS Node than on 24 (@cendor/core 0.13.0–0.15.0 shipped a real bug that was invisible
+    # on 24), so a recipe green only on the newest Node proves nothing about the LTS.
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+        category: [quickstarts, sdk, agents]
+    name: ${{ matrix.category }} (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: run every ${{ matrix.category }} recipe offline
+        run: |
+          shopt -s nullglob
+          found=0
+          for dir in recipes/${{ matrix.category }}/*/; do
+            dir="${dir%/}"
+            [ -f "$dir/package.json" ] || { echo "::error::$dir has no package.json"; exit 1; }
+            found=$((found + 1))
+            echo "::group::$dir"
+            (cd "$dir" && npm install --no-audit --no-fund && node index.mjs)
+            echo "::endgroup::"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no recipes found under recipes/${{ matrix.category }} — the shard is empty"
+            exit 1
+          fi
+          echo "$found recipe(s) ran offline in recipes/${{ matrix.category }}"
+      # G1 — exactly one @cendor/core per recipe. A stale pin rots SILENTLY GREEN (the recipe still
+      # runs; it just runs on an old shelf). Two cores = two event buses = a guardrail decision that
+      # never reaches the SDK, with nothing failing to say so.
+      - name: G1 — one @cendor/core per recipe
+        run: |
+          shopt -s nullglob
+          dirs=(recipes/${{ matrix.category }}/*/)
+          node scripts/check-one-core.mjs "${dirs[@]%/}"
+
+  coverage:
+    # A recipe CI never runs is a README promise nobody checks. This asserts every category
+    # directory under recipes/ appears in the matrix above — the one thing the per-shard loop
+    # cannot self-heal. (The Python cookbook once shipped four recipes whose "runs green offline"
+    # claim CI had never executed; this is that lesson, as a gate.)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - run: node scripts/check-recipe-coverage.mjs
