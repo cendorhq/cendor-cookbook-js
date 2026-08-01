@@ -25,22 +25,28 @@ trace  : <hex>
 audit  : true — ok: 7 entries, head <hex>… (signatures verified)
 ```
 
-Drop the `client:` argument and set `OPENAI_API_KEY` (Anthropic: `ANTHROPIC_API_KEY`) to run it
-live. ⚠️ **`openai` is an OPTIONAL PEER of `@cendor/sdk` and this recipe does not declare it**, so the
-live swap needs `npm install openai` first — otherwise the SDK cannot construct a client and you get a
-module-not-found rather than an auth error. Then it
-live — the SDK builds the provider client from your env; or pass `client: new OpenAI()` yourself. The
-budget/audit/verify guarantees are unchanged, and the audit chain it writes verifies in **Python**
-too (`cendor.acttrace.verify`), byte-for-byte.
+## Going live
+
+Drop the `client:` argument and set `OPENAI_API_KEY` (Anthropic: `ANTHROPIC_API_KEY`) — the SDK
+builds the provider client from your environment. Or keep the argument and pass
+`client: new OpenAI()` yourself; both are supported and neither changes anything else in the file.
+
+> ⚠️ **`openai` is an OPTIONAL PEER of `@cendor/sdk` and this recipe does not declare it**, so the
+> live swap needs `npm install openai` first. Without it the SDK cannot construct a client and you
+> get a module-not-found, which reads nothing like the auth error you would expect to hit next.
+
+The budget, audit and `verify()` guarantees are unchanged on the live path — and the audit chain
+this writes verifies in **Python** too (`cendor.acttrace.verify`), byte for byte. One chain format,
+both languages.
 
 ## Pins
 
-The npm shelf this recipe was **live-verified against on 2026-07-30** — a record of what was run, not a
+The npm shelf this recipe was **verified against on 2026-08-01** — a record of what was run, not a
 lockfile. `package.json` declares carets and at `3.x` a caret spans the whole major, so a fresh
 `npm install` resolves forward within major 3. `package-lock.json` is deliberately not committed.
 
 ```
-@cendor/sdk 3.0.3  (pulls @cendor/core 3.0.1 + the six libraries)
+@cendor/sdk 3.1.0  (pulls @cendor/core 3.4.0 + the six libraries)
 zod 4.x
 ```
 

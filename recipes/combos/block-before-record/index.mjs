@@ -13,6 +13,7 @@
  *
  * Offline, keyless. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -82,6 +83,6 @@ console.log(`provider calls   : ${calls.n} (the blocked one never left the proce
 console.log(`cassette entries : ${recorded} - one per call that actually happened`);
 console.log('nothing to replay: a request that was refused has no recorded response to hand back');
 
-if (tripped === null) throw new Error('the guardrail did not block the forbidden request');
-if (calls.n !== 1) throw new Error('the blocked request reached the provider');
-if (recorded !== 1) throw new Error('a blocked call was written to the cassette');
+assert.notEqual(tripped, null, 'the guardrail did not block the forbidden request');
+assert.equal(calls.n, 1, 'the blocked request reached the provider');
+assert.equal(recorded, 1, 'a blocked call was written to the cassette');

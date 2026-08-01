@@ -12,6 +12,8 @@
  * Offline: a fake OpenAI-shaped client whose reported prompt_tokens is the REAL token count of
  * whatever it received. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
+
 import { instrument, tokens } from '@cendor/core';
 import { Block, Context, useCompressor } from '@cendor/contextkit';
 import { SqueezeCompressor } from '@cendor/squeeze';
@@ -55,9 +57,9 @@ try {
   receipt = ctx.report();
 
   const compressed = receipt.decisions.filter((d) => d.action === 'compressed');
-  if (compressed.length === 0) throw new Error("evict:'compress' never fired");
-  if (compressed[0].handle.expand() !== payload) throw new Error('the eviction was not reversible');
-  if (receipt.used !== tokens.count(messages, MODEL)) throw new Error('the receipt is not the real count');
+  assert.notEqual(compressed.length, 0, "evict:'compress' never fired");
+  assert.equal(compressed[0].handle.expand(), payload, 'the eviction was not reversible');
+  assert.equal(receipt.used, tokens.count(messages, MODEL), 'the receipt is not the real count');
 
   // Ship it under a clamp cap just above the input: input + the 256-token output reserve breaches
   // the cap, so the clamp injects a server-side output ceiling instead of raising.
@@ -81,6 +83,6 @@ console.log(`billed input     : ${billed} tokens  == the receipt: ${billed === r
 console.log(`clamp injected   : max_completion_tokens=${ceiling}  (${clamps().length} clamp recorded)`);
 console.log(`cost projection  : $${assembled} assembled vs $${raw} raw`);
 
-if (billed !== receipt.used) throw new Error('billed input drifted from the contextkit receipt');
-if (ceiling === undefined) throw new Error('the clamp did not inject a server-side output ceiling');
+assert.equal(billed, receipt.used, 'billed input drifted from the contextkit receipt');
+assert.notEqual(ceiling, undefined, 'the clamp did not inject a server-side output ceiling');
 if (!(Number(assembled) < Number(raw))) throw new Error('the projection did not bind on the assembled prompt');

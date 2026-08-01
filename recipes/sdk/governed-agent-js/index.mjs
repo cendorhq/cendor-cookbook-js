@@ -7,19 +7,30 @@
  *
  * Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Agent, AuditLog, run, tool, verify, withBudget } from '@cendor/sdk';
 import { z } from 'zod';
 
-// Offline stub: first turn asks for the tool, second turn gives the final answer. (A real app passes
-// `client: new OpenAI()`; the SDK instruments it the same way.)
+/**
+ * The offline provider. Two turns, because that is the minimum an agent loop needs to be an agent
+ * loop: the model asks for a tool, the SDK runs it, and the model answers with the result in hand.
+ * A one-turn stub would let a broken tool loop pass.
+ *
+ * ⚠️ Nothing here is cendor-shaped — it is the OpenAI wire shape, exactly. `instrument()` (which the
+ * SDK applies for you) identifies a client by its SHAPE, so a real app swaps in
+ * `client: new OpenAI()` and changes nothing else. The `usage` numbers are what gets priced, so
+ * they have to be present and plausible or the budget below would have nothing to enforce against.
+ */
 function stubClient(answer) {
   let calls = 0;
   return {
     chat: {
       completions: {
+        // The tool-call turn. `finish_reason: 'tool_calls'` is what tells the loop to keep going;
+        // `params.tools` is the guard that stops the follow-up turn re-requesting the same tool.
         create: async (params) => {
           if (calls++ === 0 && params.tools) {
             return {
@@ -27,6 +38,7 @@ function stubClient(answer) {
               usage: { prompt_tokens: 60, completion_tokens: 12 },
             };
           }
+          // The final turn: `finish_reason: 'stop'` ends the loop.
           return {
             choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: answer } }],
             usage: { prompt_tokens: 90, completion_tokens: 20 },
@@ -67,3 +79,22 @@ console.log('tools  :', result.toolSteps.map((s) => s.name));
 console.log('trace  :', result.traceId);
 const [ok, detail] = verify(auditPath, { key: 'demo-key' });
 console.log('audit  :', ok, '—', detail);
+
+// The recipe IS the test. Without these, an SDK that silently stopped running the tool, stopped
+// pricing the run, or stopped writing the chain would print a perfectly plausible block of output
+// and exit 0 — which is exactly the failure a cookbook is supposed to catch.
+assert.equal(result.toolSteps.length, 1, 'the agent did not run its one tool');
+assert.equal(result.toolSteps[0].name, 'refund');
+assert.ok(result.output?.length, 'the agent produced no final answer');
+// Money is decimal.js, never a float — `.amount.gt(0)`, not `Number(...) > 0`.
+// ⚠️ `result.cost` is a `Money`, and `Money.gt()` compares against another `Money`: pass it a
+// number and it fails `currency mismatch: USD vs undefined`, which reads like a bug in your
+// pricing rather than in your assertion. The Decimal lives on `.amount`.
+assert.ok(result.cost.amount.gt(0), 'the governed run was not priced');
+assert.ok(result.usage.totalTokens > 0, 'usage did not reach the result');
+assert.ok(result.traceId, 'the run carried no trace id');
+assert.equal(ok, true, `the audit chain failed verify(): ${detail}`);
+// ⚠️ A quoted chain HEAD is per-run — entries carry timestamps, so the hash changes every time.
+// The entry COUNT and verify() reproduce; the hash does not. Assert the reproducible half.
+assert.ok(/ok: [0-9]+ entries/.test(detail), `unexpected verify() detail: ${detail}`);
+console.log('\nOK — one tool call, priced, capped, and provably recorded.');

@@ -12,6 +12,7 @@
  *
  * Offline: pure compression, no model call. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,7 +67,7 @@ console.log(`leaked content   : ${leaked}  (metadata only — the chain never ho
 console.log(`decompress()     : byte-for-byte identical ${restored === content}`);
 console.log(`verify()         : ${ok} — ${detail}`);
 
-if (restored !== content) throw new Error('decompress() must restore the original exactly');
+assert.equal(restored, content, 'decompress() must restore the original exactly');
 if (leaked) throw new Error('the audit entry leaked raw content');
 if (!(payload.tokens_after < payload.tokens_before)) throw new Error('nothing was actually compressed');
-if (ok !== true) throw new Error('the compression audit chain failed verify()');
+assert.equal(ok, true, 'the compression audit chain failed verify()');

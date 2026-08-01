@@ -20,6 +20,8 @@
  *
  * Offline: pure assembly, no model call. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
+
 import { Block, Context } from '@cendor/contextkit';
 import { tokens } from '@cendor/core';
 
@@ -73,9 +75,9 @@ const pinned = receipt.decisions.find((d) => d.role === 'system' && d.action ===
 console.log(`pinned block     : ${pinned.action} at every budget - it is the reason the agent works`);
 
 if (receipt.used > receipt.budget - receipt.reservedOutput) throw new Error('the assembly overshot');
-if (!receipt.decisions.some((d) => d.action !== 'kept')) throw new Error('nothing was evicted');
+assert.ok(receipt.decisions.some((d) => d.action !== 'kept'), 'nothing was evicted');
 for (let i = 0; i < projections.length - 1; i++) {
   if (projections[i][1] < projections[i + 1][1]) throw new Error('whatif() used grew as the budget shrank');
 }
-if (ctx.report().used !== committed) throw new Error('whatif() mutated the committed report');
-if (!JSON.stringify(messages).includes(RULES)) throw new Error('the pinned block was evicted');
+assert.equal(ctx.report().used, committed, 'whatif() mutated the committed report');
+assert.ok(JSON.stringify(messages).includes(RULES), 'the pinned block was evicted');

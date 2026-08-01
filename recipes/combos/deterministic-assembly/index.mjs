@@ -14,6 +14,7 @@
  * Change one character of the input and the hash changes; that is the property that makes a recorded
  * test suite trustworthy. Offline, keyless. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,7 +88,7 @@ console.log(`run 2 hash  : ${fingerprint(run2).slice(0, 16)}…   identical: ${f
 console.log(`one char    : ${fingerprint(nudged).slice(0, 16)}…   identical: ${same}`);
 console.log(`replay      : provider called ${boom.calls}x, answered ${JSON.stringify(out.choices[0].message.content)}`);
 
-if (fingerprint(run1) !== fingerprint(run2)) throw new Error('assembly is not byte-deterministic across runs');
-if (evicted.length === 0) throw new Error('nothing was evicted - this would prove determinism on an easy case only');
-if (boom.calls !== 0) throw new Error('run 2 missed the cassette — the assembled prompt hashed differently');
+assert.equal(fingerprint(run1), fingerprint(run2), 'assembly is not byte-deterministic across runs');
+assert.notEqual(evicted.length, 0, 'nothing was evicted - this would prove determinism on an easy case only');
+assert.equal(boom.calls, 0, 'run 2 missed the cassette — the assembled prompt hashed differently');
 if (same) throw new Error('the fingerprint ignored a real change');

@@ -17,6 +17,8 @@
  *
  * Offline: pure compression, no model call. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
+
 import { tokens } from '@cendor/core';
 import { compress, detect } from '@cendor/squeeze';
 
@@ -84,5 +86,5 @@ console.log('every row above is reversible: handle.expand() returned the origina
 
 if (!results.every((r) => r.exact)) throw new Error('a compression was not reversible');
 if (!results.every((r) => r.after <= r.before)) throw new Error("a 'compression' grew the input");
-if (autoHandle.expand() !== SAMPLES.logs) throw new Error('the auto-detected compression was not reversible');
+assert.equal(autoHandle.expand(), SAMPLES.logs, 'the auto-detected compression was not reversible');
 if (detect(SAMPLES.json) !== 'json' || detect(SAMPLES.logs) !== 'logs') throw new Error('detect() missed');

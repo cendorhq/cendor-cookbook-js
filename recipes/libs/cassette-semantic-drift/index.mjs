@@ -27,6 +27,7 @@
  *
  * Offline. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -130,7 +131,10 @@ console.log('\nhonest limit, measured rather than hidden:');
 console.log(`  lexicalScore(${JSON.stringify(negation)}, 'offer a refund') = ${lexicalScore(negation, 'offer a refund').toFixed(2)} -> match ${semanticMatch(negation, 'offer a refund')}`);
 console.log('  keyword containment cannot see a negation. Do not use it as a safety check.');
 
-if (!rows.every((r) => r.byteLevel === 1)) throw new Error('rerecord should report one byte-level divergence each time');
+assert.ok(
+  rows.every((r) => r.byteLevel === 1),
+  'rerecord should report one byte-level divergence each time',
+);
 if (!(rows[0].lex < rows[1].lex)) throw new Error('the measured inversion this recipe teaches has changed');
 if (!semanticMatch(RECORDED, 'refund within 30 days')) throw new Error('the lexical default missed a match');
 if (!semanticMatch(negation, 'offer a refund')) throw new Error('the documented negation limit changed');

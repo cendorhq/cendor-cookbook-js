@@ -15,6 +15,7 @@
  *
  * Offline: a fake OpenAI-shaped client and a temp directory. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -101,7 +102,7 @@ await p7.client.chat.completions.create({ model: MODEL, messages: ASK });
 console.log(`no scope : provider ${p7.calls}x - nothing is intercepted; this is production`);
 
 if (p1.calls !== 1 || p2.calls !== 0 || p4.calls !== 0) throw new Error('replay must not reach the provider');
-if (unrecorded === null) throw new Error('replay must THROW on an unrecorded call, not fall through');
-if (p5.calls !== 1) throw new Error('auto should have recorded against a missing tape');
+assert.notEqual(unrecorded, null, 'replay must THROW on an unrecorded call, not fall through');
+assert.equal(p5.calls, 1, 'auto should have recorded against a missing tape');
 if (p6.calls !== 1 || changes.length === 0) throw new Error('rerecord must run live and report the divergence');
-if (!readFileSync(tape).equals(before)) throw new Error('rerecord overwrote the tape');
+assert.ok(readFileSync(tape).equals(before), 'rerecord overwrote the tape');

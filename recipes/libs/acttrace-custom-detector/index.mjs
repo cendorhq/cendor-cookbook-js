@@ -20,6 +20,8 @@
  * All the identifiers below are synthetic, format-valid examples. Offline, no key.
  * Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
+
 import {
   Policy,
   enableLocalePack,
@@ -78,6 +80,6 @@ resetDetectors();
 console.log(`resetDetectors()  : back to ${JSON.stringify(categories(PAYLOAD))} - use this between tests`);
 
 if (JSON.stringify(cleaned).includes('PAT-')) throw new Error('the custom secret survived redaction');
-if (findings.case_ref.count !== 1) throw new Error('the validator did not reject the bad check digit');
+assert.equal(findings.case_ref.count, 1, 'the validator did not reject the bad check digit');
 if (!findings.uk_nino || !findings.in_aadhaar) throw new Error('the locale packs did not register');
 if (categories(PAYLOAD).includes('partner_token')) throw new Error('resetDetectors() left the registry dirty');

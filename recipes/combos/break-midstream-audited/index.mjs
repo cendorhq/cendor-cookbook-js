@@ -13,6 +13,7 @@
  * `break` is not a replacement for `block` — see ../../libs/tokenguard-hard-vs-runaway.
  * Offline: a fake streaming client, no key. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -86,8 +87,8 @@ console.log(`raised       : ${raised}x BudgetExceeded - ${reason.split('\n')[0]}
 console.log(`chained      : budget_event(action='broken'), cap ${cap} tokens`);
 console.log(`verify()     : ${ok} - ${detail}`);
 
-if (raised !== 1) throw new Error('exactly one BudgetExceeded should surface on the cut');
+assert.equal(raised, 1, 'exactly one BudgetExceeded should surface on the cut');
 if (!(received.length > 0 && received.length < CHUNKS)) throw new Error('the runaway stream was not cut mid-flight');
-if (closed.v !== true) throw new Error('the provider stream was left open after the cut');
-if (broken.length === 0) throw new Error("the cut was not chained as a budget_event(action='broken')");
-if (ok !== true) throw new Error('the break audit chain failed verify()');
+assert.equal(closed.v, true, 'the provider stream was left open after the cut');
+assert.notEqual(broken.length, 0, "the cut was not chained as a budget_event(action='broken')");
+assert.equal(ok, true, 'the break audit chain failed verify()');

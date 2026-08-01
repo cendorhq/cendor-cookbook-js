@@ -70,3 +70,27 @@ that durability is a swappable backend and the handle is portable JSON — is th
 
 Python twin: [`libs/squeeze-persist-and-restore`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/libs/squeeze-persist-and-restore) ·
 Packages: `@cendor/core`, `@cendor/squeeze` · Offline ✓ · [← all recipes](../../../README.md)
+## Pins
+
+The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
+workspace and no committed lockfile, so a fresh `npm install` re-resolves within these ranges and
+drift shows up as a red CI job instead of being frozen into a lock nobody re-reads.
+
+```
+@cendor/core     ^3.3.0
+@cendor/squeeze  ^3.0.0
+```
+
+⚠️ **A caret is not a floor you can forget.** At `3.x` a caret spans the whole major, so a newer
+patch or minor than the numbers above is expected, not drift — but the reverse also holds:
+`npm install` over an existing `node_modules` is **lock-obedient, not a refresh**, and will happily
+leave you on an older 3.x while everything still passes. To move onto what is actually published:
+
+```bash
+rm -rf node_modules package-lock.json && npm install
+node ../../../scripts/check-one-core.mjs .
+```
+
+That second line is the one that matters after any `@cendor/core` minor: **the whole `@cendor/*` set
+moves together**, and a sibling left behind resolves a *second* copy of `@cendor/core` — two event
+buses, so a guardrail decision never reaches the budget, and nothing fails to say so.

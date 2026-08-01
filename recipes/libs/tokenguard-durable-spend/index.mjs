@@ -21,6 +21,7 @@
  *
  * Offline: a fake OpenAI-shaped client and a temp file. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { appendFileSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -111,8 +112,11 @@ console.log(`in-memory report : acme $${inMemory.acme.usd.amount.toString()} ove
 console.log(`budget events    : ${blocked.length} - action='${last.action}', cap=${last.capTokens} tokens (a blocked call emits no LLMCall, so this is the ONLY signal)`);
 console.log('shutdown         : flush() drained the queue before close() - a background worker would otherwise leave rows unwritten on an abrupt exit');
 
-if (rows.length !== 3) throw new Error('one persisted row per call that actually happened');
+assert.equal(rows.length, 3, 'one persisted row per call that actually happened');
 if (blocked.length !== 1 || last.action !== 'blocked') throw new Error('the block was not on the bus');
 if (!rows.every((r) => 'tenant' in r.tags)) throw new Error('track() tags did not reach the sink');
-if (rows.some((r) => typeof r.usd !== 'string')) throw new Error('usd must reach a sink as a Decimal string');
-if (rows[2].tags.tenant !== 'globex') throw new Error('QueueSink did not preserve write order');
+assert.ok(
+  rows.every((r) => typeof r.usd === 'string'),
+  'usd must reach a sink as a Decimal string',
+);
+assert.equal(rows[2].tags.tenant, 'globex', 'QueueSink did not preserve write order');

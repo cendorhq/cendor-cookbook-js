@@ -12,6 +12,7 @@
  *
  * Offline both ways. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -90,6 +91,6 @@ console.log(`verify(): ${ok} — ${detail}`);
 console.log(`cassette: ${statSync(tape).size} bytes on disk — commit it and CI runs free`);
 
 if (live.calls !== 1 || boom.calls !== 0) throw new Error('the replay must short-circuit the provider');
-if (replayRow.tokens !== recordedRow.tokens) throw new Error('the replay did not accrue the recorded usage');
-if (audited.length === 0) throw new Error('the replayed call was not chained by the attached audit log');
-if (ok !== true) throw new Error('the replay audit chain failed verify()');
+assert.equal(replayRow.tokens, recordedRow.tokens, 'the replay did not accrue the recorded usage');
+assert.notEqual(audited.length, 0, 'the replayed call was not chained by the attached audit log');
+assert.equal(ok, true, 'the replay audit chain failed verify()');

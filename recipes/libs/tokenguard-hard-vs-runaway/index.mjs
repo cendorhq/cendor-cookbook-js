@@ -13,6 +13,8 @@
  *
  * Offline: fake OpenAI-shaped clients, no key. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
+
 import { instrument } from '@cendor/core';
 import { BudgetExceeded, clamps, reset, withBudget } from '@cendor/tokenguard';
 
@@ -99,7 +101,7 @@ console.log(`break  (non-stream) : ${after ? 'threw POST-flight' : 'no effect'} 
 console.log(`                      ${after ? after.split('\n')[0].slice(0, 96) : ''}`);
 console.log('choose              : clamp when the answer should be short (provider enforces it); break when length is unknown and you want a stop button');
 
-if (ceiling === undefined) throw new Error('clamp did not inject a server-side ceiling');
+assert.notEqual(ceiling, undefined, 'clamp did not inject a server-side ceiling');
 if (cut === null || got === 0 || got >= 80) throw new Error('break did not cut the stream mid-flight');
-if (closed.v !== true) throw new Error('break left the provider stream open');
-if (after === null) throw new Error('break on a non-streamed call should still surface a breach');
+assert.equal(closed.v, true, 'break left the provider stream open');
+assert.notEqual(after, null, 'break on a non-streamed call should still surface a breach');

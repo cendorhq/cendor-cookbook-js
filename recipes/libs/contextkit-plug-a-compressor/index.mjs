@@ -16,6 +16,7 @@
  *
  * Offline: pure assembly, no model call. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { Block, Context, useCompressor } from '@cendor/contextkit';
 import { tokens } from '@cendor/core';
@@ -79,6 +80,6 @@ console.log(`squeeze (default): ${theirs.tokensBefore} -> ${theirs.tokensAfter} 
 console.log('both satisfy the same protocol - contextkit imported neither, and no call site changed');
 console.log('the handle is the contract: whatever you plug in must be able to give the original back');
 
-if (mine.handle.expand() !== log) throw new Error("the custom compressor's handle was not reversible");
-if (theirs.handle.expand() !== log) throw new Error('the squeeze handle was not reversible');
+assert.equal(mine.handle.expand(), log, "the custom compressor's handle was not reversible");
+assert.equal(theirs.handle.expand(), log, 'the squeeze handle was not reversible');
 if (!(mine.tokensAfter < mine.tokensBefore)) throw new Error('the custom compressor did not compress');

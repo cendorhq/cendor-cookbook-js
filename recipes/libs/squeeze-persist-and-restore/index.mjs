@@ -20,6 +20,7 @@
  *
  * Offline: pure compression, no model call. Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -79,7 +80,7 @@ function restore(workdir) {
   console.log(`  process 2 pid    : ${process.pid} (a different interpreter)`);
   console.log(`  MemoryStore()    : ${memoryResult}`);
   console.log(`  FileStore(...)   : restored ${restored.length.toLocaleString('en-US')} chars, sha256 matches: ${digest(restored) === saved.digest}`);
-  if (digest(restored) !== saved.digest) throw new Error('the restored content is not the original');
+  assert.equal(digest(restored), saved.digest, 'the restored content is not the original');
 }
 
 const restoreArg = process.argv.indexOf('--restore');

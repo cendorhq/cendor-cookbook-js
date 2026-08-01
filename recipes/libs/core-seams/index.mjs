@@ -19,6 +19,8 @@
  * Offline: fake OpenAI-shaped clients, no key, no OpenTelemetry needed.
  * Run:  npm install && node index.mjs
  */
+import assert from 'node:assert/strict';
+
 import {
   LLMCall,
   addStreamObserver,
@@ -112,6 +114,6 @@ console.log('                   every budget, receipt and estimate downstream no
 bus.unsubscribe(collect);
 
 if (grouped.length !== 2 || calls.at(-1).traceId === 'order-8812-refund') throw new Error('trace() did not group');
-if (seen.length !== 12) throw new Error('the stream observer did not see every chunk');
-if (after[1] !== 'registered') throw new Error('tokens.method() should report the registered counter');
-if (after[0] !== Math.floor(text.length / 2)) throw new Error('the custom counter was not used');
+assert.equal(seen.length, 12, 'the stream observer did not see every chunk');
+assert.equal(after[1], 'registered', 'tokens.method() should report the registered counter');
+assert.equal(after[0], Math.floor(text.length / 2), 'the custom counter was not used');
