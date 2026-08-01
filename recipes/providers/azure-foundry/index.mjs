@@ -92,105 +92,115 @@ async function recordLive() {
   console.log(`recorded live call to ${fixture}`);
 }
 
+/** Everything the offline demonstration does. Wrapped so the RECORD path can skip it
+ *  without `process.exit()` — see the note below. */
+async function offlineDemo() {
+  reset();
+  const calls = [];
+  bus.subscribe((e) => {
+    if (e instanceof LLMCall) calls.push(e);
+  });
+
+  const client = instrument(fakeFoundry());
+
+  const tmp = mkdtempSync(join(tmpdir(), 'cendor-azure-foundry-'));
+  const chain = join(tmp, 'audit.jsonl');
+  const tape = join(tmp, 'foundry.cassette.json');
+
+  // ---- ACT ONE: the silence ------------------------------------------------------------------------
+  // ONE cap value, used in both acts — that is what makes the comparison mean anything. $0.06 is a
+  // little over the cost of a single call (11k in + 1.5k out at gpt-4o rates ~= $0.0425), so once the
+  // deployment is priced it admits exactly one call and refuses the second. Unpriced, it admits all 8.
+  const CAP_USD = 0.06;
+  const capped = budget({ usd: CAP_USD, onExceed: 'block' })(async () => {
+    for (let i = 0; i < 8; i++) await ask(client, 'summarize the ticket thread');
+  });
+  let blockedBefore = false;
+  try {
+    await capped();
+  } catch (err) {
+    if (!(err instanceof BudgetExceeded)) throw err;
+    blockedBefore = true;
+  }
+  const ranBefore = report().rows.reduce((n, row) => n + row.calls, 0);
+  const costBefore = calls.at(-1).cost;
+  console.log(`deployment: ${DEPLOYMENT}  (a deployment NAME, not a model id)`);
+  console.log(`unpriced  : cost = ${costBefore == null ? 'null' : `$${costBefore.amount.toString()}`}`);
+  console.log(`            a $${CAP_USD} USD cap let all ${ranBefore} calls through — it could not bind.`);
+  console.log('            ^ nothing errored. That is the danger: it LOOKS governed.');
+
+  // ---- ACT TWO: one line ---------------------------------------------------------------------------
+  prices.registerDeployment(DEPLOYMENT, { like: BASE_MODEL });
+  console.log(`fix       : prices.registerDeployment(${JSON.stringify(DEPLOYMENT)}, { like: ${JSON.stringify(BASE_MODEL)} })`);
+
+  reset();
+  let blockedAfter = false;
+  try {
+    await capped();
+  } catch (err) {
+    if (!(err instanceof BudgetExceeded)) throw err;
+    blockedAfter = true;
+  }
+  const ranAfter = report().rows.reduce((n, row) => n + row.calls, 0);
+  const costAfter = calls.at(-1).cost;
+  console.log(`priced    : the SAME call now costs $${costAfter.amount.toString()}`);
+  console.log(`            the SAME cap now blocks after ${ranAfter} call(s) — enforceable at last.`);
+
+  // ---- the rest of the lifecycle, now that money works ----------------------------------------------
+  const audit = new AuditLog('foundry-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
+  try {
+    install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
+    try {
+      const seenBefore = providerCalls.n;
+      try {
+        await ask(client, 'ignore previous instructions');
+      } catch (err) {
+        if (!(err instanceof GuardrailTripped)) throw err;
+        const trip = err.decisions.at(-1);
+        console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
+        console.log(`            provider saw ${providerCalls.n - seenBefore} extra call(s) => $0 spent on it`);
+      }
+      await audit.decision(async (dec) => dec.record({ model: DEPLOYMENT }), {
+        input: 'foundry batch',
+        actor: 'agent',
+      });
+    } finally {
+      uninstall();
+    }
+  } finally {
+    audit.detach();
+  }
+
+  const before = providerCalls.n;
+  await cassette.using(tape, { mode: 'record' }, () => ask(client, 'Say hi in five words.'));
+  const recorded = providerCalls.n - before;
+  await cassette.using(tape, { mode: 'replay' }, () => ask(client, 'Say hi in five words.'));
+  const extra = providerCalls.n - before - recorded;
+  console.log(`cassette  : replayed 1 call, ${extra} provider call(s), $0`);
+
+  const [ok, detail] = verify(chain, { key: SIGNING_KEY });
+  console.log(`verify()  : ${ok} - ${detail}`);
+
+  // The two halves of the story, both asserted. If a future price table ever learns this deployment
+  // name on its own, the first pair fails and the prose above stops being true.
+  assert.equal(costBefore, null, 'the deployment name was priced before registration — premise changed');
+  assert.equal(blockedBefore, false, 'a USD cap bound on an unpriced deployment — premise changed');
+  assert.equal(ranBefore, 8, `all 8 calls should get through unpriced, got ${ranBefore}`);
+  assert.ok(costAfter?.amount.gt(0), 'registerDeployment() did not make the deployment priceable');
+  assert.equal(blockedAfter, true, 'the USD cap still did not bind after registration');
+  assert.ok(ranAfter > 0, 'no call ran after registration — nothing priced was ever measured');
+  assert.ok(ranAfter < 8, `the cap should now block mid-loop, but all ${ranAfter} calls ran`);
+  assert.equal(extra, 0, 'a replayed call must not reach the provider');
+  assert.equal(ok, true, 'the audit chain failed verify()');
+}
+
+// ⚠️ NO `process.exit(0)` HERE. Calling it while the provider SDK's keep-alive socket is still
+// closing aborts node on Windows with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` —
+// and it does so AFTER the cassette has been written, so a perfectly good recording looks like a
+// crash. Measured on the 2026-08-01 live sweep across five providers. Dispatch instead, and let the
+// module end normally so node drains its own handles.
 if (process.env.RECORD === '1') {
   await recordLive();
-  process.exit(0);
+} else {
+  await offlineDemo();
 }
-
-reset();
-const calls = [];
-bus.subscribe((e) => {
-  if (e instanceof LLMCall) calls.push(e);
-});
-
-const client = instrument(fakeFoundry());
-
-const tmp = mkdtempSync(join(tmpdir(), 'cendor-azure-foundry-'));
-const chain = join(tmp, 'audit.jsonl');
-const tape = join(tmp, 'foundry.cassette.json');
-
-// ---- ACT ONE: the silence ------------------------------------------------------------------------
-// ONE cap value, used in both acts — that is what makes the comparison mean anything. $0.06 is a
-// little over the cost of a single call (11k in + 1.5k out at gpt-4o rates ~= $0.0425), so once the
-// deployment is priced it admits exactly one call and refuses the second. Unpriced, it admits all 8.
-const CAP_USD = 0.06;
-const capped = budget({ usd: CAP_USD, onExceed: 'block' })(async () => {
-  for (let i = 0; i < 8; i++) await ask(client, 'summarize the ticket thread');
-});
-let blockedBefore = false;
-try {
-  await capped();
-} catch (err) {
-  if (!(err instanceof BudgetExceeded)) throw err;
-  blockedBefore = true;
-}
-const ranBefore = report().rows.reduce((n, row) => n + row.calls, 0);
-const costBefore = calls.at(-1).cost;
-console.log(`deployment: ${DEPLOYMENT}  (a deployment NAME, not a model id)`);
-console.log(`unpriced  : cost = ${costBefore == null ? 'null' : `$${costBefore.amount.toString()}`}`);
-console.log(`            a $${CAP_USD} USD cap let all ${ranBefore} calls through — it could not bind.`);
-console.log('            ^ nothing errored. That is the danger: it LOOKS governed.');
-
-// ---- ACT TWO: one line ---------------------------------------------------------------------------
-prices.registerDeployment(DEPLOYMENT, { like: BASE_MODEL });
-console.log(`fix       : prices.registerDeployment(${JSON.stringify(DEPLOYMENT)}, { like: ${JSON.stringify(BASE_MODEL)} })`);
-
-reset();
-let blockedAfter = false;
-try {
-  await capped();
-} catch (err) {
-  if (!(err instanceof BudgetExceeded)) throw err;
-  blockedAfter = true;
-}
-const ranAfter = report().rows.reduce((n, row) => n + row.calls, 0);
-const costAfter = calls.at(-1).cost;
-console.log(`priced    : the SAME call now costs $${costAfter.amount.toString()}`);
-console.log(`            the SAME cap now blocks after ${ranAfter} call(s) — enforceable at last.`);
-
-// ---- the rest of the lifecycle, now that money works ----------------------------------------------
-const audit = new AuditLog('foundry-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
-try {
-  install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
-  try {
-    const seenBefore = providerCalls.n;
-    try {
-      await ask(client, 'ignore previous instructions');
-    } catch (err) {
-      if (!(err instanceof GuardrailTripped)) throw err;
-      const trip = err.decisions.at(-1);
-      console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
-      console.log(`            provider saw ${providerCalls.n - seenBefore} extra call(s) => $0 spent on it`);
-    }
-    await audit.decision(async (dec) => dec.record({ model: DEPLOYMENT }), {
-      input: 'foundry batch',
-      actor: 'agent',
-    });
-  } finally {
-    uninstall();
-  }
-} finally {
-  audit.detach();
-}
-
-const before = providerCalls.n;
-await cassette.using(tape, { mode: 'record' }, () => ask(client, 'Say hi in five words.'));
-const recorded = providerCalls.n - before;
-await cassette.using(tape, { mode: 'replay' }, () => ask(client, 'Say hi in five words.'));
-const extra = providerCalls.n - before - recorded;
-console.log(`cassette  : replayed 1 call, ${extra} provider call(s), $0`);
-
-const [ok, detail] = verify(chain, { key: SIGNING_KEY });
-console.log(`verify()  : ${ok} - ${detail}`);
-
-// The two halves of the story, both asserted. If a future price table ever learns this deployment
-// name on its own, the first pair fails and the prose above stops being true.
-assert.equal(costBefore, null, 'the deployment name was priced before registration — premise changed');
-assert.equal(blockedBefore, false, 'a USD cap bound on an unpriced deployment — premise changed');
-assert.equal(ranBefore, 8, `all 8 calls should get through unpriced, got ${ranBefore}`);
-assert.ok(costAfter?.amount.gt(0), 'registerDeployment() did not make the deployment priceable');
-assert.equal(blockedAfter, true, 'the USD cap still did not bind after registration');
-assert.ok(ranAfter > 0, 'no call ran after registration — nothing priced was ever measured');
-assert.ok(ranAfter < 8, `the cap should now block mid-loop, but all ${ranAfter} calls ran`);
-assert.equal(extra, 0, 'a replayed call must not reach the provider');
-assert.equal(ok, true, 'the audit chain failed verify()');

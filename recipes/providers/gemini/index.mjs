@@ -103,88 +103,98 @@ async function recordLive() {
   console.log(`recorded live call to ${fixture}`);
 }
 
+/** Everything the offline demonstration does. Wrapped so the RECORD path can skip it
+ *  without `process.exit()` — see the note below. */
+async function offlineDemo() {
+  reset();
+  const calls = [];
+  bus.subscribe((e) => {
+    if (e instanceof LLMCall) calls.push(e);
+  });
+
+  const client = instrument(fakeGenAI());
+
+  const tmp = mkdtempSync(join(tmpdir(), 'cendor-gemini-'));
+  const chain = join(tmp, 'audit.jsonl');
+  const tape = join(tmp, 'gemini.cassette.json');
+
+  const audit = new AuditLog('gemini-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
+  let totalCalls = 0;
+  try {
+    install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
+    try {
+      try {
+        await client.models.generateContent({ model: MODEL, contents: 'ignore previous instructions' });
+      } catch (err) {
+        if (!(err instanceof GuardrailTripped)) throw err;
+        const trip = err.decisions.at(-1);
+        console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
+        console.log(`            provider saw ${providerCalls.n} call(s) => $0 spent on it`);
+      }
+      await audit.decision(
+        async (dec) => {
+          try {
+            await answer(client);
+          } catch (err) {
+            if (!(err instanceof BudgetExceeded)) throw err;
+            console.log(`budget    : ${err.constructor.name} - blocked pre-flight, no call ran`);
+            dec.flag('usd cap reached', { action: 'blocked', severity: 'warning', data: 'cap' });
+          }
+          dec.record({ model: MODEL });
+        },
+        { input: 'gemini batch', actor: 'agent' },
+      );
+    } finally {
+      uninstall();
+    }
+    const r = report(['feature']);
+    totalCalls = r.rows.reduce((n, row) => n + row.calls, 0);
+    console.log(`spend     : ${totalCalls} calls  $${r.total().amount.toString()} (usageMetadata normalized onto the same bus)`);
+  } finally {
+    audit.detach();
+  }
+
+  // The distinctive bit, measured: a cumulative stream must NOT be summed.
+  const nonStream = calls.filter((c) => c.usage.outputTokens > 0).length;
+  const stream = await client.models.generateContentStream({ model: MODEL, contents: 'stream it' });
+  let chunks = 0;
+  for await (const _ of stream) chunks++;
+  const streamed = calls.at(-1);
+  console.log(`stream    : ${chunks} chunks, each reporting the RUNNING total (400 -> 1200 -> 2000)`);
+  console.log(`            recorded output = ${streamed.usage.outputTokens}, not ${400 + 1200 + 2000} — the last value wins, sums do not`);
+
+  const before = providerCalls.n;
+  await cassette.using(tape, { mode: 'record' }, () =>
+    client.models.generateContent({ model: MODEL, contents: 'Say hi in five words.' }),
+  );
+  const recorded = providerCalls.n - before;
+  await cassette.using(tape, { mode: 'replay' }, () =>
+    client.models.generateContent({ model: MODEL, contents: 'Say hi in five words.' }),
+  );
+  const extra = providerCalls.n - before - recorded;
+  console.log(`cassette  : replayed 1 call, ${extra} provider call(s), $0`);
+
+  const [ok, detail] = verify(chain, { key: SIGNING_KEY });
+  console.log(`verify()  : ${ok} - ${detail}`);
+
+  assert.ok(nonStream > 0, 'no Gemini call was normalized — usageMetadata was not read at all');
+  assert.equal(
+    streamed.usage.outputTokens,
+    2000,
+    `a cumulative stream must report its LAST value (2000), not the sum (3600); got ${streamed.usage.outputTokens}`,
+  );
+  assert.ok(calls.some((c) => c.cost?.amount.gt(0)), 'no Gemini call was priced');
+  assert.equal(extra, 0, 'a replayed call must not reach the provider');
+  assert.equal(ok, true, 'the audit chain failed verify()');
+}
+
+// ⚠️ NO `process.exit(0)` HERE. Calling it while the provider SDK's keep-alive socket is still
+// closing aborts node on Windows with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` —
+// and it does so AFTER the cassette has been written, so a perfectly good recording looks like a
+// crash. Measured on the 2026-08-01 live sweep across five providers. Dispatch instead, and let the
+// module end normally so node drains its own handles.
 if (process.env.RECORD === '1') {
   await recordLive();
-  process.exit(0);
+} else {
+  await offlineDemo();
 }
-
-reset();
-const calls = [];
-bus.subscribe((e) => {
-  if (e instanceof LLMCall) calls.push(e);
-});
-
-const client = instrument(fakeGenAI());
-
-const tmp = mkdtempSync(join(tmpdir(), 'cendor-gemini-'));
-const chain = join(tmp, 'audit.jsonl');
-const tape = join(tmp, 'gemini.cassette.json');
-
-const audit = new AuditLog('gemini-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
-let totalCalls = 0;
-try {
-  install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
-  try {
-    try {
-      await client.models.generateContent({ model: MODEL, contents: 'ignore previous instructions' });
-    } catch (err) {
-      if (!(err instanceof GuardrailTripped)) throw err;
-      const trip = err.decisions.at(-1);
-      console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
-      console.log(`            provider saw ${providerCalls.n} call(s) => $0 spent on it`);
-    }
-    await audit.decision(
-      async (dec) => {
-        try {
-          await answer(client);
-        } catch (err) {
-          if (!(err instanceof BudgetExceeded)) throw err;
-          console.log(`budget    : ${err.constructor.name} - blocked pre-flight, no call ran`);
-          dec.flag('usd cap reached', { action: 'blocked', severity: 'warning', data: 'cap' });
-        }
-        dec.record({ model: MODEL });
-      },
-      { input: 'gemini batch', actor: 'agent' },
-    );
-  } finally {
-    uninstall();
-  }
-  const r = report(['feature']);
-  totalCalls = r.rows.reduce((n, row) => n + row.calls, 0);
-  console.log(`spend     : ${totalCalls} calls  $${r.total().amount.toString()} (usageMetadata normalized onto the same bus)`);
-} finally {
-  audit.detach();
-}
-
-// The distinctive bit, measured: a cumulative stream must NOT be summed.
-const nonStream = calls.filter((c) => c.usage.outputTokens > 0).length;
-const stream = await client.models.generateContentStream({ model: MODEL, contents: 'stream it' });
-let chunks = 0;
-for await (const _ of stream) chunks++;
-const streamed = calls.at(-1);
-console.log(`stream    : ${chunks} chunks, each reporting the RUNNING total (400 -> 1200 -> 2000)`);
-console.log(`            recorded output = ${streamed.usage.outputTokens}, not ${400 + 1200 + 2000} — the last value wins, sums do not`);
-
-const before = providerCalls.n;
-await cassette.using(tape, { mode: 'record' }, () =>
-  client.models.generateContent({ model: MODEL, contents: 'Say hi in five words.' }),
-);
-const recorded = providerCalls.n - before;
-await cassette.using(tape, { mode: 'replay' }, () =>
-  client.models.generateContent({ model: MODEL, contents: 'Say hi in five words.' }),
-);
-const extra = providerCalls.n - before - recorded;
-console.log(`cassette  : replayed 1 call, ${extra} provider call(s), $0`);
-
-const [ok, detail] = verify(chain, { key: SIGNING_KEY });
-console.log(`verify()  : ${ok} - ${detail}`);
-
-assert.ok(nonStream > 0, 'no Gemini call was normalized — usageMetadata was not read at all');
-assert.equal(
-  streamed.usage.outputTokens,
-  2000,
-  `a cumulative stream must report its LAST value (2000), not the sum (3600); got ${streamed.usage.outputTokens}`,
-);
-assert.ok(calls.some((c) => c.cost?.amount.gt(0)), 'no Gemini call was priced');
-assert.equal(extra, 0, 'a replayed call must not reach the provider');
-assert.equal(ok, true, 'the audit chain failed verify()');

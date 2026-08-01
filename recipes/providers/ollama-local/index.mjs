@@ -93,6 +93,13 @@ try {
 
     // A TOKEN cap is the right control here: it needs no rate, so it binds identically whether or
     // not the model has a price row. A USD cap on a $0/unpriced model is a no-op that LOOKS enforced.
+    //
+    // ⚠️ THE CAP IS CALIBRATED TO THE FAKE, AND THAT IS THE LESSON. Offline the fake reports
+    // 1,800 in / 240 out per turn, so 8,000 tokens is crossed on the 5th call. Measured live on
+    // 2026-08-01 against `llama3.2:latest`, the SAME prompt cost **31 in / 50 out** — about 20x
+    // less — so all 20 turns fit inside 8,000 tokens and the cap never binds at all. Nothing is
+    // broken; the threshold was simply tuned against a fixture. Calibrate a real cap from measured
+    // traffic, never from a stand-in, or you will ship a control that cannot fire.
     const capped = budget({ tokens: 8_000, onExceed: 'block' })(async () => {
       for (let i = 0; i < 20; i++) await ask('summarize the ticket thread');
     });
@@ -148,6 +155,20 @@ assert.ok(
   one.cost == null || one.cost.amount.isZero(),
   `a local model must cost null or $0, got $${one.cost?.amount.toString()} — a rate was invented`,
 );
-assert.ok(ran > 0 && ran < 20, `the 8,000-token cap should bind mid-loop, got ${ran} calls`);
+// ⚠️ Asserted differently on the two paths, because the two paths are genuinely different — and
+// pretending otherwise is how a recipe starts lying. OFFLINE the fixture's usage makes the cap bind
+// mid-loop, and that must stay true. LIVE, a real local model answers ~20x smaller, so the cap does
+// NOT bind and asserting that it does would be asserting a property of the fake.
+if (LIVE) {
+  assert.equal(ran, 20, `every turn should complete live under an uncrossed cap, got ${ran}`);
+  console.log(
+    `
+⚠️  LIVE: all ${ran} turns fit inside the 8,000-token cap, so it never bound. Offline the ` +
+      'fixture reports ~20x more usage per turn and the cap binds on the 5th call. A threshold ' +
+      'calibrated against a stand-in is a control that cannot fire — measure your own traffic.',
+  );
+} else {
+  assert.ok(ran > 0 && ran < 20, `offline, the 8,000-token cap should bind mid-loop, got ${ran} calls`);
+}
 assert.equal(extra, 0, 'a replayed call must not reach the daemon');
 assert.equal(ok, true, 'the audit chain failed verify()');
