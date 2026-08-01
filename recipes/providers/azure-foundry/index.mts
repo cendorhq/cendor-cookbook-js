@@ -159,6 +159,30 @@ async function offlineDemo() {
   console.log(`priced    : the SAME call now costs $${costAfter.amount.toString()}`);
   console.log(`            the SAME cap now blocks after ${ranAfter} call(s) — enforceable at last.`);
 
+  // ---- ACT THREE: show your working ----------------------------------------------------------------
+  // `prices.explain(id)` answers "why is my cost that number?" without reading any source: which
+  // table answered, whether one of YOUR registrations is overriding it, which source the underlying
+  // rate came from, and that source's own as-of date. Offline — it reads the active table.
+  const why = prices.explain(DEPLOYMENT);
+  console.log(`explain   : ${why.summary()}`);
+  console.log(`            how=${why.how}  registered=${why.registered}  table=${why.sourceName} (${why.tableOrigin})`);
+  for (const note of why.notes) console.log(`            note: ${note}`);
+
+  const base = prices.explain(BASE_MODEL);
+  console.log(`explain   : ${base.summary()}`);
+  console.log(
+    `            rate came from ${base.rowSource ?? base.sourceName} as of ${base.rowAsof ?? base.snapshotDate ?? 'undated'}`,
+  );
+
+  // To pull today's list prices instead of the bundled snapshot, one call — a public, keyless GET:
+  //   await prices.refresh();                                                  // the cendor-prices feed
+  //   await prices.refresh(undefined, { source: 'azure', region: 'eastus2' }); // Microsoft's catalog
+  //   await prices.refresh(undefined, { source: 'aws', region: 'us-east-1' }); // Amazon's price files
+  // Not called here: this recipe runs OFFLINE, like every recipe in the cookbook. A refresh would
+  // NOT undo the registration above — yours outranks every table, always.
+  assert.equal(why.registered, true, 'explain() should report the registration in effect');
+  assert.equal(prices.explain('no-such-model-ever').how, 'unpriced', 'explain() must never throw');
+
   // ---- the rest of the lifecycle, now that money works ----------------------------------------------
   const audit = new AuditLog('foundry-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
   try {

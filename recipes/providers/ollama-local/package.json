@@ -12,9 +12,9 @@
   "dependencies": {
     "@cendor/acttrace": "^3.1.0",
     "@cendor/cassette": "^3.0.0",
-    "@cendor/core": "^3.5.0",
+    "@cendor/core": "^3.6.0",
     "@cendor/guardrails": "^3.1.1",
-    "@cendor/tokenguard": "^3.1.1",
+    "@cendor/tokenguard": "^3.2.0",
     "ollama": "^0.6.3"
   }
 }
