@@ -1,0 +1,17 @@
+{
+  "name": "cendor-recipe-guardrails",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - block, redact and record before the model call (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/acttrace": "^3.1.0",
+    "@cendor/core": "^3.4.0",
+    "@cendor/guardrails": "^3.1.0"
+  }
+}

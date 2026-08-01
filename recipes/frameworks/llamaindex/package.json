@@ -1,0 +1,18 @@
+{
+  "name": "cendor-recipe-llamaindex",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - pack unbounded RAG retrieval into a token budget, reversibly (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/contextkit": "^3.1.0",
+    "@cendor/core": "^3.4.0",
+    "@cendor/squeeze": "^3.0.0",
+    "llamaindex": "^0.12.1"
+  }
+}

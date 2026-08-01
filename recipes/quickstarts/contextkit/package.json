@@ -1,0 +1,15 @@
+{
+  "name": "cendor-recipe-contextkit",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - fit a prompt to a token budget without dropping the wrong things (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/contextkit": "^3.1.0"
+  }
+}

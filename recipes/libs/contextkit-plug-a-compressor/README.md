@@ -45,7 +45,7 @@ compressor can live anywhere. Every number matches the Python twin.
 
 Python twin: [`libs/contextkit-plug-a-compressor`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/libs/contextkit-plug-a-compressor) ·
 Packages: `@cendor/core`, `@cendor/contextkit`, `@cendor/squeeze` · Offline ✓ ·
-[← all recipes](../../../README.md)
+Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -54,7 +54,7 @@ drift shows up as a red CI job instead of being frozen into a lock nobody re-rea
 
 ```
 @cendor/contextkit  ^3.1.0
-@cendor/core        ^3.3.0
+@cendor/core        ^3.4.0
 @cendor/squeeze     ^3.0.0
 ```
 

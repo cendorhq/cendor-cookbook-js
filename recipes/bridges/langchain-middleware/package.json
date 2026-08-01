@@ -1,0 +1,17 @@
+{
+  "name": "cendor-recipe-langchain-middleware",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - a cendor Guardrail as a LangChain beforeModel middleware (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/guardrails": "^3.1.0",
+    "langchain": "^1.5.4",
+    "@langchain/core": "^1.2.4"
+  }
+}

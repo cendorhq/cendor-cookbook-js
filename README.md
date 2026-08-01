@@ -54,12 +54,60 @@ There is **no workspace and no root install**. Every recipe is a self-contained 
 | [cassette-semantic-drift](recipes/libs/cassette-semantic-drift/) | library | Measured: a surface scorer keeps the paraphrase and drops the real change. **Carries the one Python-only omission** | `core` `cassette` | ✓ |
 | [acttrace-custom-detector](recipes/libs/acttrace-custom-detector/) | library | `registerDetector()` with a validator + `enableLocalePack()`; 1 of 5 found before, 5 after | `acttrace` | ✓ |
 | [core-seams](recipes/libs/core-seams/) | library | `trace()` (a **callback** here), `addStreamObserver()` and `tokens.register()` | `core` | ✓ |
+| [acttrace](recipes/quickstarts/acttrace/) | quickstart | A hash-chained record; one flipped byte breaks `verify()` at a named sequence number | `acttrace` | ✓ |
+| [cassette](recipes/quickstarts/cassette/) | quickstart | Record once, replay forever — **1 provider call then 0**, which is the whole claim | `core` `cassette` | ✓ |
+| [contextkit](recipes/quickstarts/contextkit/) | quickstart | Priority-packed assembly with a receipt; pinned blocks survive, the docs blob truncates | `contextkit` | ✓ |
+| [guardrails](recipes/quickstarts/guardrails/) | quickstart | Block + redact **before the wire**, proven from what the provider was actually handed | `core` `guardrails` `acttrace` | ✓ |
+| [squeeze](recipes/quickstarts/squeeze/) | quickstart | 83k tokens → 58 against a 400 target, and `expand()` restores byte-for-byte | `core` `squeeze` | ✓ |
+| [tokenguard](recipes/quickstarts/tokenguard/) | quickstart | A runaway loop stopped **pre-flight** at a $0.50 cap, with spend attributed per feature | `core` `tokenguard` | ✓ |
+| [anthropic](recipes/providers/anthropic/) | **provider** | Three input rates on one call — cache read, cache write, fresh — and why a Claude projection is a projection | `core` + 4 | ✓ |
+| [azure-foundry](recipes/providers/azure-foundry/) | **provider** | A deployment name is unpriced, so a USD cap **silently cannot bind** — then one line fixes it | `core` + 4 | ✓ |
+| [bedrock](recipes/providers/bedrock/) | **provider** | `send(new ConverseCommand(…))` captured directly; camelCase usage; a token cap that binds with no price at all | `core` + 4 | ✓ |
+| [gemini](recipes/providers/gemini/) | **provider** | `usageMetadata`, and a **cumulative** stream: 2000 tokens, not the 3600 a sum would report | `core` + 4 | ✓ |
+| [ollama-local](recipes/providers/ollama-local/) | **provider** | A $0 local model — everything governed except the money, and the omission is documented not faked | `core` + 4 | ✓ |
+| [openai-chat](recipes/providers/openai-chat/) | **provider** | The whole five-step lifecycle on Chat Completions, with per-feature/per-user attribution | `core` + 4 | ✓ |
+| [openai-responses](recipes/providers/openai-responses/) | **provider** | Four usage numbers, not two: cached input and reasoning output are both billed | `core` + 4 | ✓ |
+| [custom-category](recipes/governance/custom-category/) | **governance** | A denylist misses the paraphrase; a semantic category catches it | `core` `guardrails` | ✓ |
+| [eu-ai-act-evidence](recipes/governance/eu-ai-act-evidence/) | **governance** | An evidence pack where the **refusal** is a first-class record, verified through the CLI | `core` `acttrace` | ✓ |
+| [guardrails-policy](recipes/governance/guardrails-policy/) | **governance** | Config-as-data: every decision carries the policy version + hash into the chain | `core` `guardrails` `acttrace` | ✓ |
+| [guardrails-redteam](recipes/governance/guardrails-redteam/) | **governance** | A **50%** trip rate, asserted to stay partial — a 100% score means the corpus flatters the gate | `guardrails` | ✓ |
+| [intent-gate](recipes/governance/intent-gate/) | **governance** | allow-mode and deny-mode, both directions asserted | `core` `guardrails` | ✓ |
+| [llm-judge-guardrail](recipes/governance/llm-judge-guardrail/) | **governance** | Screen with a model and **see the bill for it** — the judge is on the same bus | `core` `guardrails` `cassette` `tokenguard` | ✓ |
+| [pii-guardrail](recipes/governance/pii-guardrail/) | **governance** | One detection engine for the gate and the audit trail; `AuditLog` redacts on write too | `core` `guardrails` `acttrace` | ✓ |
+| [spotlight-untrusted-docs](recipes/governance/spotlight-untrusted-docs/) | **governance** | Wrap retrieved content as data — and the URL rule still scans inside the wrapper | `core` `guardrails` | ✓ |
+| [task-adherence](recipes/governance/task-adherence/) | **governance** | `delete_account` flagged against "book me a flight" — drift, not safety | `core` `guardrails` `cassette` `tokenguard` | ✓ |
+| [claude-agent-pretooluse](recipes/bridges/claude-agent-pretooluse/) | **bridge** | A cendor block → `permissionDecision: "deny"`; the SDK's hook types are erased at runtime | `guardrails` | ✓ |
+| [langchain-middleware](recipes/bridges/langchain-middleware/) | **bridge** | A cendor block → a `beforeModel` throw, before the model call | `guardrails` | ✓ |
+| [mcp-tool-gating](recipes/bridges/mcp-tool-gating/) | **bridge** | A blocked tool returns a **result the model can read**, and the body provably does not run | `guardrails` | ✓ |
+| [openai-agents-guardrail](recipes/bridges/openai-agents-guardrail/) | **bridge** | A cendor block → `tripwireTriggered`; a fail-closed block *throws*, so both paths map | `guardrails` | ✓ |
+| [azure-foundry-otel](recipes/frameworks/azure-foundry-otel/) | **framework** | Foundry governance as ordinary OTel spans — and two ways to accidentally export nothing | `core` `tokenguard` `acttrace` | ✓ |
+| [langchain](recipes/frameworks/langchain/) | **framework** | One callback handler; the chain is unchanged and `provider` honestly reads `langchain` | `core` `tokenguard` `acttrace` | ✓ |
+| [llamaindex](recipes/frameworks/llamaindex/) | **framework** | Retrieval score becomes packing priority; contextkit **auto-discovers** squeeze | `core` `contextkit` `squeeze` | ✓ |
+| [openai-agents-sdk](recipes/frameworks/openai-agents-sdk/) | **framework** | Spend by **agent**, not just by model — 18× apart on one model | `core` `tokenguard` `acttrace` | ✓ |
+| [batch-ingest](recipes/observability/batch-ingest/) | **observability** | Post-hoc accounting for a Batch job — honest that no gate is possible | `core` `tokenguard` | ✓ |
+| [otel-export](recipes/observability/otel-export/) | **observability** | Metrics + spans with no Cendor-specific exporter; `outputReserve` is what makes a refusal exportable | `core` `tokenguard` `acttrace` | ✓ |
+| [vitest-cassette](recipes/testing/vitest-cassette/) | **testing** | A vitest suite that never calls a provider — and a wrapper that asserts tests actually ran | `core` `cassette` | ✓ |
 
-Every recipe above has a Python twin of the same folder name in
-[cendor-cookbook](https://github.com/cendorhq/cendor-cookbook), except `core-js`,
-`governed-agent-js` and `m365-custom-engine-js`, whose twins drop the `-js` suffix
-(`quickstarts/core`, `sdk/governed-agent`, `agents/m365-custom-engine-py`). Each recipe's README
-links to its own twin.
+**52 recipes across 11 categories**, and every one of them has a Python twin of the **same folder
+name** in [cendor-cookbook](https://github.com/cendorhq/cendor-cookbook). Each recipe's README links
+to its own twin.
+
+Four folder names are exceptions, and they are exceptions on purpose:
+
+| here | Python twin | why |
+|---|---|---|
+| `quickstarts/core-js` | `quickstarts/core` | historical — from before the two cookbooks were split. Renaming it now would break a cendor.ai deep link and the MCP index |
+| `sdk/governed-agent-js` | `sdk/governed-agent` | same |
+| `agents/m365-custom-engine-js` | `agents/m365-custom-engine-py` | same |
+| `testing/vitest-cassette` | `testing/pytest-cassette` | **deliberate.** `pytest` is a Python toolchain name; the twin genuinely *is* a different test runner, so the name says so |
+
+### The one recipe with no TypeScript twin
+
+| Python recipe | Why there is no twin here |
+|---|---|
+| [`apps/chat-playground`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/apps/chat-playground) | It is a **Gradio** app, and Gradio is Python-only. A TypeScript port would be a *different application* wearing a twin's folder name — which is worse than an honest gap, because the folder name is an API that cendor.ai deep-links and the MCP docs server indexes. |
+
+That is the complete list. Everything else in the Python cookbook is here.
 
 ## Run any recipe
 
@@ -102,8 +150,11 @@ is the contract.
 | Capability | Status in TypeScript | Where it bites |
 |---|---|---|
 | `localEmbeddingScorer` (model2vec static embeddings) | **Python-only.** The symbol exists and throws by design, so the failure is immediate and named rather than a missing export. Wire your own embedder through `embeddingScorer(embedFn)` instead | any recipe scoring semantic similarity offline |
-| acttrace NER (Presidio) | **Python-only.** TypeScript uses the bundled `compromise` NER, which is always available and needs no heavy extra | detector-heavy redaction recipes |
+| acttrace NER (Presidio) | **Not equivalent.** Python uses Presidio (spaCy transformer models); TypeScript uses the **optional** `compromise` peer, which is English-only, synchronous, and has **lower recall** on free-text names/places/orgs. A useful extra layer, **not** a sufficient sole PII control in either language. The regex + validator catalogue underneath it *is* identical | [`governance/pii-guardrail`](recipes/governance/pii-guardrail/) |
 | `SQLiteStore` / `SQLiteSink` | Present and **identically cased**, but backed by the **optional native** `better-sqlite3`. Measured 2026-07-31: that package publishes **no prebuilt binary for Node 20 on linux-x64**, so anything depending on it is green on Node 22 and red on Node 20 unless a C++ toolchain is present. Both persistence recipes here therefore use a hand-written backend and say so | [`libs/squeeze-persist-and-restore`](recipes/libs/squeeze-persist-and-restore/), [`libs/tokenguard-durable-spend`](recipes/libs/tokenguard-durable-spend/) |
+
+| `semanticMatch` default scorer | **Lexical in both**, but Python can also reach for `localEmbeddingScorer`. Measured: a reword scores 0.75 (passes at the 0.6 default) while a true paraphrase scores 0.51 and **fails**. Pass `openaiEmbeddingScorer(...)` for real paraphrase tolerance | [`testing/vitest-cassette`](recipes/testing/vitest-cassette/), [`quickstarts/cassette`](recipes/quickstarts/cassette/) |
+| `messages.stream()` / `messages.parse()` / `responses.parse()` | **Deliberately NOT instrumentation targets in TypeScript.** In the JS SDKs they are helpers built on `create`, so a target would double-count one request. Python is the opposite — each POSTs its own request and needs its own target | [`providers/anthropic`](recipes/providers/anthropic/), [`providers/openai-responses`](recipes/providers/openai-responses/) |
 
 Everything else the recipes here touch — `QueueSink`, `useCompressor`, `registerDetector`,
 `enableLocalePack`, `addStreamObserver`, `tokens.register`, `trace` — is fully ported. Note the

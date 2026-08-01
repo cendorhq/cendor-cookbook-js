@@ -41,7 +41,7 @@ them apart. Note the shape: TypeScript's `track` and `withBudget` are **async ca
 
 Python twin: [`combos/record-a-governed-run`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/combos/record-a-governed-run) ·
 Packages: `@cendor/core`, `@cendor/cassette`, `@cendor/tokenguard`, `@cendor/acttrace` · Offline ✓ ·
-[← all recipes](../../../README.md)
+Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -51,7 +51,7 @@ drift shows up as a red CI job instead of being frozen into a lock nobody re-rea
 ```
 @cendor/acttrace    ^3.1.0
 @cendor/cassette    ^3.0.0
-@cendor/core        ^3.3.0
+@cendor/core        ^3.4.0
 @cendor/tokenguard  ^3.1.0
 ```
 

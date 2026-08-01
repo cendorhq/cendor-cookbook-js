@@ -1,0 +1,16 @@
+{
+  "name": "cendor-recipe-openai-agents-guardrail",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - a cendor Guardrail as an OpenAI Agents input guardrail (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/guardrails": "^3.1.0",
+    "@openai/agents": "^0.14.2"
+  }
+}

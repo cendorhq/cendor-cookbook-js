@@ -1,0 +1,20 @@
+{
+  "name": "cendor-recipe-anthropic",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - the governed lifecycle where prompt-cache billing has three rates (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/acttrace": "^3.1.0",
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.4.0",
+    "@cendor/guardrails": "^3.1.0",
+    "@cendor/tokenguard": "^3.1.0",
+    "@anthropic-ai/sdk": "^0.115.0"
+  }
+}

@@ -12,6 +12,6 @@
   "dependencies": {
     "@cendor/cassette": "^3.0.0",
     "@cendor/contextkit": "^3.1.0",
-    "@cendor/core": "^3.3.0"
+    "@cendor/core": "^3.4.0"
   }
 }

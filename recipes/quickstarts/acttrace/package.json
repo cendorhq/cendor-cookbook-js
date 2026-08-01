@@ -1,0 +1,15 @@
+{
+  "name": "cendor-recipe-acttrace",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - a tamper-evident record of what your agent did (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/acttrace": "^3.1.0"
+  }
+}

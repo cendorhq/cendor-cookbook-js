@@ -37,7 +37,7 @@ turns). The sha256 prefix differs only because each recipe hashes its own JSON s
 
 Python twin: [`combos/deterministic-assembly`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/combos/deterministic-assembly) ·
 Packages: `@cendor/core`, `@cendor/contextkit`, `@cendor/cassette` · Offline ✓ ·
-[← all recipes](../../../README.md)
+Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -47,7 +47,7 @@ drift shows up as a red CI job instead of being frozen into a lock nobody re-rea
 ```
 @cendor/cassette    ^3.0.0
 @cendor/contextkit  ^3.1.0
-@cendor/core        ^3.3.0
+@cendor/core        ^3.4.0
 ```
 
 ⚠️ **A caret is not a floor you can forget.** At `3.x` a caret spans the whole major, so a newer

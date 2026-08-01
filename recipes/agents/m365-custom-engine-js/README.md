@@ -259,9 +259,18 @@ drift. All `@cendor/*` libraries share **major 3**; minors and patches are indep
 which is why `@cendor/contextkit` is `3.0.1` and `@cendor/acttrace` is `3.1.0`.
 
 ```
-@cendor/core 3.0.1 · @cendor/tokenguard 3.0.1 · @cendor/{guardrails,squeeze,cassette} 3.0.0
-@cendor/contextkit 3.0.1 · @cendor/acttrace 3.1.0
-@microsoft/agents-hosting 1.7.1 · @microsoft/agents-hosting-express 1.7.1 · @microsoft/agents-activity 1.7.1
+@cendor/acttrace                   ^3.1.0
+@cendor/cassette                   ^3.0.0
+@cendor/contextkit                 ^3.1.0
+@cendor/core                       ^3.4.0
+@cendor/guardrails                 ^3.1.0
+@cendor/squeeze                    ^3.0.0
+@cendor/tokenguard                 ^3.1.0
+@microsoft/agents-activity         ^1.7.1
+@microsoft/agents-hosting          ^1.7.1
+@microsoft/agents-hosting-express  ^1.7.1
+decimal.js                         ^10.4.3
+express                            ^5.0.0
 ```
 
 ⚠️ **Bump the whole `@cendor/*` set together.** A sibling left on an older major resolves a *second*
@@ -275,4 +284,4 @@ The Python twin lives in the Python cookbook:
 SDK](https://cendor.ai/docs/providers#microsoft-365-agents-sdk-custom-engine-agent) — this is a **libraries**
 integration, not a `cendor-sdk` one.
 
-Libraries: `@cendor/core`, `tokenguard`, `guardrails`, `contextkit`, `squeeze`, `cassette`, `acttrace` · Host: `@microsoft/agents-hosting` · Offline ✓ · TypeScript · [← all recipes](../../../README.md)
+Libraries: `@cendor/core`, `tokenguard`, `guardrails`, `contextkit`, `squeeze`, `cassette`, `acttrace` · Host: `@microsoft/agents-hosting` · Offline ✓ · TypeScript · Live switch: none (offline only) · [← all recipes](../../../README.md)

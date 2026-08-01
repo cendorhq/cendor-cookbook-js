@@ -75,7 +75,7 @@ is recall-oriented, so it tolerates extra surrounding text — which is also why
 Do not use it as a safety check.
 
 Python twin: [`libs/cassette-semantic-drift`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/libs/cassette-semantic-drift) ·
-Packages: `@cendor/core`, `@cendor/cassette` · Offline ✓ · [← all recipes](../../../README.md)
+Packages: `@cendor/core`, `@cendor/cassette` · Offline ✓ · Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -84,7 +84,7 @@ drift shows up as a red CI job instead of being frozen into a lock nobody re-rea
 
 ```
 @cendor/cassette  ^3.0.0
-@cendor/core      ^3.3.0
+@cendor/core      ^3.4.0
 ```
 
 ⚠️ **A caret is not a floor you can forget.** At `3.x` a caret spans the whole major, so a newer

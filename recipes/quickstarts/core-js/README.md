@@ -41,11 +41,11 @@ lockfile. `package.json` declares a caret and at `3.x` a caret spans the whole m
 drift. `package-lock.json` is deliberately **not** committed, for the same reason.
 
 ```
-@cendor/core 3.0.1
+@cendor/core  ^3.4.0
 ```
 
 ⚠️ `npm install` over an existing `node_modules` is **lock-obedient, not a refresh** — it will happily
 leave you on an older 3.x. To move onto what is actually published:
 `rm -rf node_modules package-lock.json && npm install`.
 
-Libraries: `@cendor/core` · Offline ✓ · TypeScript · [← all recipes](../../../README.md)
+Libraries: `@cendor/core` · Offline ✓ · TypeScript · Live switch: none (offline only) · [← all recipes](../../../README.md)

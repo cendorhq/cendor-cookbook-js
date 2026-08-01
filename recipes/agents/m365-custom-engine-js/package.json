@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "description": "Cendor cookbook \u2014 govern a Microsoft 365 Agents SDK custom engine agent (JS, offline, no key).",
-  "_playgroundVerifiedAgainst": "@microsoft/m365agentsplayground 0.2.28 (2026-08-01) — the @microsoft/agents-* ^1.7.1 pins below are the versions that combination was measured on",
+  "_playgroundVerifiedAgainst": "@microsoft/m365agentsplayground 0.2.28 (2026-08-01) \u2014 the @microsoft/agents-* ^1.7.1 pins below are the versions that combination was measured on",
   "engines": {
     "node": ">=20"
   },
@@ -14,7 +14,7 @@
     "@cendor/acttrace": "^3.1.0",
     "@cendor/cassette": "^3.0.0",
     "@cendor/contextkit": "^3.1.0",
-    "@cendor/core": "^3.3.0",
+    "@cendor/core": "^3.4.0",
     "@cendor/guardrails": "^3.1.0",
     "@cendor/squeeze": "^3.0.0",
     "@cendor/tokenguard": "^3.1.0",

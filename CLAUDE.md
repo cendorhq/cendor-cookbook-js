@@ -21,6 +21,25 @@ business constraining each other. One repo per toolchain keeps both simple.
 **Recipe folder names are an API.** cendor.ai `/cookbook` deep-links to them and the MCP docs server
 indexes them. Never rename one — not even when moving a recipe between the two cookbooks.
 
+### The four folder names that differ from their Python twin
+
+A new recipe uses the **bare Python folder name**. These four are the complete list of exceptions;
+do not add a fifth without a reason as specific as these, and do not "fix" any of them:
+
+| here | Python twin | why |
+|---|---|---|
+| `quickstarts/core-js` | `quickstarts/core` | historical, from before the cookbooks were split |
+| `sdk/governed-agent-js` | `sdk/governed-agent` | historical |
+| `agents/m365-custom-engine-js` | `agents/m365-custom-engine-py` | historical |
+| `testing/vitest-cassette` | `testing/pytest-cassette` | **deliberate** (2026-08-01). `pytest` is a Python toolchain name baked into a folder name; a TS folder called `pytest-cassette` is wrong on its face, and the twin genuinely *is* a different test runner |
+
+The first three are frozen because renaming them would break a cendor.ai deep link and the MCP index
+— not because they are good names. Every recipe added since uses the bare name.
+
+**One Python recipe has no twin here, on purpose:** `apps/chat-playground` is a Gradio app, and
+Gradio is Python-only. A TypeScript port would be a different application wearing a twin's folder
+name. It is documented in [`README.md`](README.md); do not "close the gap".
+
 ## Cardinal rules
 
 1. **Every recipe runs offline, with no API key.** CI has no secrets and never will. A recipe that

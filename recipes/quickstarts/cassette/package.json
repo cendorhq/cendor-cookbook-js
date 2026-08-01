@@ -1,0 +1,16 @@
+{
+  "name": "cendor-recipe-cassette",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - record an agent call once, replay it forever (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.4.0"
+  }
+}

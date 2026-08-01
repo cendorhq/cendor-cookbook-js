@@ -59,7 +59,7 @@ a `RegExp` `pattern`, where Python uses a dataclass with a compiled pattern.
 Every identifier here is synthetic and format-valid — nothing real is committed.
 
 Python twin: [`libs/acttrace-custom-detector`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/libs/acttrace-custom-detector) ·
-Packages: `@cendor/acttrace` · Offline ✓ · [← all recipes](../../../README.md)
+Packages: `@cendor/acttrace` · Offline ✓ · Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no

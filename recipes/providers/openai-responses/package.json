@@ -1,0 +1,20 @@
+{
+  "name": "cendor-recipe-openai-responses",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - the governed lifecycle on the OpenAI Responses API (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/acttrace": "^3.1.0",
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.4.0",
+    "@cendor/guardrails": "^3.1.0",
+    "@cendor/tokenguard": "^3.1.0",
+    "openai": "^7.3.0"
+  }
+}

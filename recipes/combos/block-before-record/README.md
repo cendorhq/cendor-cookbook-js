@@ -38,7 +38,7 @@ object.
 
 Python twin: [`combos/block-before-record`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/combos/block-before-record) ·
 Packages: `@cendor/core`, `@cendor/guardrails`, `@cendor/cassette` · Offline ✓ ·
-[← all recipes](../../../README.md)
+Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -47,7 +47,7 @@ drift shows up as a red CI job instead of being frozen into a lock nobody re-rea
 
 ```
 @cendor/cassette    ^3.0.0
-@cendor/core        ^3.3.0
+@cendor/core        ^3.4.0
 @cendor/guardrails  ^3.1.0
 ```
 

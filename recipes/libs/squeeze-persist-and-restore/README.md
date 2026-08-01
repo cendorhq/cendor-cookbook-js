@@ -69,7 +69,7 @@ Use `SQLiteStore` in your own app if you already build native modules. The point
 that durability is a swappable backend and the handle is portable JSON — is the same either way.
 
 Python twin: [`libs/squeeze-persist-and-restore`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/libs/squeeze-persist-and-restore) ·
-Packages: `@cendor/core`, `@cendor/squeeze` · Offline ✓ · [← all recipes](../../../README.md)
+Packages: `@cendor/core`, `@cendor/squeeze` · Offline ✓ · Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -77,7 +77,7 @@ workspace and no committed lockfile, so a fresh `npm install` re-resolves within
 drift shows up as a red CI job instead of being frozen into a lock nobody re-reads.
 
 ```
-@cendor/core     ^3.3.0
+@cendor/core     ^3.4.0
 @cendor/squeeze  ^3.0.0
 ```
 

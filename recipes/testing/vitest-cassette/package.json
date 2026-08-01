@@ -1,0 +1,18 @@
+{
+  "name": "cendor-recipe-vitest-cassette",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - a cassette-backed vitest suite that never calls a provider (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.4.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -91,3 +91,135 @@ updates:
     directory: /recipes/libs/core-seams
     schedule: { interval: weekly }
     commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/acttrace
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/cassette
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/contextkit
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/guardrails
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/squeeze
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/quickstarts/tokenguard
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/anthropic
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/azure-foundry
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/bedrock
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/gemini
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/ollama-local
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/openai-chat
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/providers/openai-responses
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/custom-category
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/eu-ai-act-evidence
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/guardrails-policy
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/guardrails-redteam
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/intent-gate
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/llm-judge-guardrail
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/pii-guardrail
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/spotlight-untrusted-docs
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/governance/task-adherence
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/bridges/claude-agent-pretooluse
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/bridges/langchain-middleware
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/bridges/mcp-tool-gating
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/bridges/openai-agents-guardrail
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/frameworks/azure-foundry-otel
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/frameworks/langchain
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/frameworks/llamaindex
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/frameworks/openai-agents-sdk
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/observability/batch-ingest
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/observability/otel-export
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
+    directory: /recipes/testing/vitest-cassette
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }

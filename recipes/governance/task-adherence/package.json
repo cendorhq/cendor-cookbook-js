@@ -1,0 +1,18 @@
+{
+  "name": "cendor-recipe-task-adherence",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - is this tool call on-task? a BYO-judge alignment check (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.4.0",
+    "@cendor/guardrails": "^3.1.0",
+    "@cendor/tokenguard": "^3.1.0"
+  }
+}

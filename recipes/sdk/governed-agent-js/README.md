@@ -46,8 +46,8 @@ lockfile. `package.json` declares carets and at `3.x` a caret spans the whole ma
 `npm install` resolves forward within major 3. `package-lock.json` is deliberately not committed.
 
 ```
-@cendor/sdk 3.1.0  (pulls @cendor/core 3.4.0 + the six libraries)
-zod 4.x
+@cendor/sdk  ^3.2.1
+zod          ^4.0.0
 ```
 
 ⚠️ `npm install` over an existing `node_modules` is **lock-obedient, not a refresh**. To move onto what
@@ -55,4 +55,4 @@ is published: `rm -rf node_modules package-lock.json && npm install`. Then
 `node ../../../scripts/check-one-core.mjs .` asserts exactly one `@cendor/core` — two copies are two
 event buses, and cross-library cooperation stops with nothing failing to say so.
 
-Libraries: `@cendor/sdk` (+ `@cendor/tokenguard`, `@cendor/acttrace`) · Offline ✓ · TypeScript · [← all recipes](../../../README.md)
+Libraries: `@cendor/sdk` (+ `@cendor/tokenguard`, `@cendor/acttrace`) · Offline ✓ · TypeScript · Live switch: none (offline only) · [← all recipes](../../../README.md)

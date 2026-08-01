@@ -1,0 +1,16 @@
+{
+  "name": "cendor-recipe-squeeze",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - shrink a huge blob before it eats your context window (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/core": "^3.4.0",
+    "@cendor/squeeze": "^3.0.0"
+  }
+}

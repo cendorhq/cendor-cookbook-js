@@ -36,7 +36,8 @@ jobs:
       fail-fast: false
       matrix:
         node: ["20", "22"]
-        category: [quickstarts, sdk, agents, combos, libs]
+        category: [quickstarts, sdk, agents, combos, libs, providers, governance, bridges,
+                   frameworks, observability, testing]
     name: ${{ matrix.category }} (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     defaults:
@@ -94,3 +95,9 @@ jobs:
         with:
           node-version: "22"
       - run: node scripts/check-recipe-coverage.mjs
+      # A README is not executable, so no other gate can see a footer that promises a `RECORD=1`
+      # live path the code never implements. Five brand-new recipes shipped exactly that on
+      # 2026-08-01 with every other job green. Both directions are checked: a promised switch that
+      # does not exist, AND an undocumented one that does.
+      - run: node scripts/check-live-switches.mjs --self-test
+      - run: node scripts/check-live-switches.mjs

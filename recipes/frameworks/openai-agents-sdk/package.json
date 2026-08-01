@@ -1,0 +1,18 @@
+{
+  "name": "cendor-recipe-openai-agents-sdk",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - govern an OpenAI Agents SDK run end to end (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/core": "^3.4.0",
+    "@cendor/tokenguard": "^3.1.0",
+    "@cendor/acttrace": "^3.1.0",
+    "@openai/agents": "^0.14.2"
+  }
+}

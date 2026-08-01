@@ -1,0 +1,20 @@
+{
+  "name": "cendor-recipe-gemini",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - the governed lifecycle on google-genai, whose usage shape shares nothing with OpenAI (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/acttrace": "^3.1.0",
+    "@cendor/cassette": "^3.0.0",
+    "@cendor/core": "^3.4.0",
+    "@cendor/guardrails": "^3.1.0",
+    "@cendor/tokenguard": "^3.1.0",
+    "@google/genai": "^2.15.0"
+  }
+}

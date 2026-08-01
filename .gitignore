@@ -34,3 +34,12 @@ dist/
 # following the recipe's own runbook dirties the tree.
 chain.jsonl
 **/chain-*.jsonl
+
+# LIVE provider recordings. The `RECORD=1` path in every `recipes/providers/*` recipe writes a real
+# recorded exchange here — a MAINTAINER artifact, never a shipped fixture. The Python cookbook
+# commits exactly four fixtures (the two judge cassettes and the pytest ones), all recorded against
+# an offline FAKE and therefore deterministic; it commits ZERO provider fixtures, and neither do we.
+# Two reasons: a live recording carries real model output into a public repo, and — measured
+# 2026-08-01 — a cassette outlives the code that produced it, so a fixture recorded under a
+# temporarily-broken build keeps replaying that breakage long after the code is fixed.
+recipes/providers/*/fixtures/

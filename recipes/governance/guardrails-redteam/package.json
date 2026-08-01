@@ -1,0 +1,15 @@
+{
+  "name": "cendor-recipe-guardrails-redteam",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - measure your guardrails' trip rate against a labeled corpus (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/guardrails": "^3.1.0"
+  }
+}

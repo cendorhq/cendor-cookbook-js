@@ -89,7 +89,7 @@ SQLiteSink throws only when CONSTRUCTED: MODULE_NOT_FOUND
 > only on construction.
 
 Python twin: [`libs/tokenguard-durable-spend`](https://github.com/cendorhq/cendor-cookbook/tree/main/recipes/libs/tokenguard-durable-spend) ·
-Packages: `@cendor/core`, `@cendor/tokenguard` · Offline ✓ · [← all recipes](../../../README.md)
+Packages: `@cendor/core`, `@cendor/tokenguard` · Offline ✓ · Live switch: none (offline only) · [← all recipes](../../../README.md)
 ## Pins
 
 The npm shelf this recipe declares. `package.json` is the only pin file — this repo has no
@@ -97,7 +97,7 @@ workspace and no committed lockfile, so a fresh `npm install` re-resolves within
 drift shows up as a red CI job instead of being frozen into a lock nobody re-reads.
 
 ```
-@cendor/core        ^3.3.0
+@cendor/core        ^3.4.0
 @cendor/tokenguard  ^3.1.0
 ```
 

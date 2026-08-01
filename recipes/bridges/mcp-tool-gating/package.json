@@ -1,0 +1,17 @@
+{
+  "name": "cendor-recipe-mcp-tool-gating",
+  "private": true,
+  "type": "module",
+  "description": "Cendor cookbook - gate an MCP tool's arguments with a cendor Guardrail (JS, offline).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@cendor/guardrails": "^3.1.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.1.13"
+  }
+}
