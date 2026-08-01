@@ -236,8 +236,10 @@ And within the model meter, three honest limits:
   channel there at all**. So the same break renders differently: measured with an identical break at
   142 output tokens, JS emitted 3 interim flushes on emulator and 1 on msteams, Python 0 and 2.
 - **`channelData.cendor` is for the channel / your back end.** Whether a *client* surfaces it is
-  client-specific, and the M365 Agents Playground projects `channelData` away in its UI (it is still on
-  the wire). Assert it in a test or log it; don't tell people to look for it in the Playground.
+  client-specific. The M365 Agents Playground's **chat pane** projects `channelData` away — but its
+  **Log Panel does not**: click the outbound activity (`message 201`, the agent → Playground
+  direction) and the Request tab shows the whole Activity JSON with the envelope in it (measured on
+  Playground 0.2.28). Assert it in a test or log it rather than depending on a client to render it.
 
 ## Orchestration layers
 
