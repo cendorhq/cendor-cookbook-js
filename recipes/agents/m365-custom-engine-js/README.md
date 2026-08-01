@@ -67,12 +67,32 @@ return instrument(new OpenAI({
 Nothing else changes. `instrument()` detection is structural, not name-based.
 
 **Driving it interactively** — the same endpoint, from the M365 Agents Playground (local, anonymous,
-no tenant):
+no tenant). Verified end to end against **`@microsoft/m365agentsplayground` 0.2.28** on 2026-08-01:
+the agent answers in the Playground UI.
 
 ```bash
 npm i -g @microsoft/m365agentsplayground        # or: winget install agentsplayground
-node -e "import('./agent.mjs').then(m => m.serve(new m.GovernedAgent({auditPath:'chain.jsonl'})))"
+
+# terminal 1 — the agent. Note the `cd` and the `npm install`: per-recipe installs, no workspace.
+cd recipes/agents/m365-custom-engine-js && npm install
+node serve.mjs
+
+# terminal 2 — the Playground, pointed at it
 agentsplayground -e "http://localhost:3979/api/messages" -c emulator
+```
+
+> ⚠️ **The `cd` is not decoration, and skipping it looks like "the recipe doesn't run".** This block
+> used to be a `node -e "import('./agent.mjs')…"` one-liner, and `./agent.mjs` resolves against the
+> *current directory*. Measured, verbatim, from the repo root:
+> `Error [ERR_MODULE_NOT_FOUND]: Cannot find module …/cendor-cookbook-js/agent.mjs`. `serve.mjs`
+> imports relative to itself, prints which port it is on, and turns a busy port into one readable
+> line instead of an `EADDRINUSE` stack.
+
+Or run the scripted smoke instead of clicking — it starts the agent, sends the Playground's own
+handshake and a message Activity, and asserts a governed reply came back:
+
+```bash
+cd recipes/agents/m365-custom-engine-js && npm install && node smoke.mjs
 ```
 
 ## The wrap map

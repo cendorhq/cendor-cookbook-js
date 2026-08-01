@@ -28,3 +28,9 @@ dist/
 .vscode/
 .DS_Store
 *.log
+
+# Audit chains written by the agent recipes' `serve.py` / `serve.mjs` when a reader drives them
+# from the M365 Agents Playground. They are per-run evidence, not fixtures — and without this rule
+# following the recipe's own runbook dirties the tree.
+chain.jsonl
+**/chain-*.jsonl

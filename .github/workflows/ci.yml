@@ -57,6 +57,15 @@ jobs:
             found=$((found + 1))
             echo "::group::$dir"
             (cd "$dir" && npm install --no-audit --no-fund && node index.mjs)
+            # A recipe MAY ship a `smoke.mjs` — a second entry point for something `index.mjs`
+            # cannot cover on its own. The m365 one drives the two Activities the M365 Agents
+            # Playground sends, because "does it run in the Playground?" used to be answerable
+            # only by a human with a browser, and a broken run instruction sat in that README
+            # unnoticed until 2026-08-01. Optional by design: no other recipe needs one yet.
+            if [ -f "$dir/smoke.mjs" ]; then
+              echo "--- smoke.mjs ---"
+              (cd "$dir" && node smoke.mjs)
+            fi
             echo "::endgroup::"
           done
           if [ "$found" -eq 0 ]; then
