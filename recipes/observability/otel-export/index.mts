@@ -42,12 +42,9 @@ import {
   InMemoryMetricExporter,
   MeterProvider,
   PeriodicExportingMetricReader,
+  type ResourceMetrics,
 } from '@opentelemetry/sdk-metrics';
-import {
-  BasicTracerProvider,
-  InMemorySpanExporter,
-  SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-node';
+import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
 
 const SIGNING_KEY = 'demo-signing-key';
 
@@ -82,13 +79,16 @@ function fakeClient() {
   return instrument({
     chat: {
       completions: {
-        create: async (_req) => ({ usage: { prompt_tokens: 1000, completion_tokens: 500 } }),
+        create: async (_req: { model: string; messages: { role: string; content: string }[] }) => ({ usage: { prompt_tokens: 1000, completion_tokens: 500 } }),
       },
     },
   });
 }
 
-async function tokenUsageTotal(metricReader, metricExporter) {
+async function tokenUsageTotal(
+  metricReader: { forceFlush(): Promise<void> },
+  metricExporter: { getMetrics(): ResourceMetrics[] },
+) {
   await metricReader.forceFlush(); // push the current accumulation into the in-memory exporter
   let total = 0;
   for (const rm of metricExporter.getMetrics()) {
@@ -131,10 +131,7 @@ const audit = new AuditLog('otel-demo', {
 const capped = budget({ usd: 0.02, onExceed: 'block', outputReserve: 500 })(async () => {
   for (let i = 0; i < 10; i++) {
     await track({ feature: 'summarizer' }, () =>
-      client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: 'hi' }],
-      }),
+      client.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] }),
     );
   }
 });
