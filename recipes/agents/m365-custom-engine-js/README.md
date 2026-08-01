@@ -254,6 +254,36 @@ And within the model meter, three honest limits:
 Expect **two OpenTelemetry span families** from a governed agent — the hosting SDK's own
 `microsoft_agents` spans alongside `cendor.core` / `cendor.acttrace`. That is additive, not a conflict.
 
+### Exporting them (this recipe ships no OTel bootstrap, on purpose)
+
+A hosted agent's telemetry belongs to the host application, not to a sample, so `agent.mts` sets up
+no exporter. Everything it emits reaches any OTLP backend once *your* app configures one.
+
+⚠️ **`OTEL_EXPORTER_OTLP_ENDPOINT` on its own does nothing, and the failure is silent.** Cendor's
+telemetry is `mode=auto`: the emitter attaches only once a **global** provider exists. Measured on
+the Python twin 2026-08-01 — with just the variable set the run is green and the collector receives
+**nothing**; with the bootstrap it lands 10 calls and 45 governance events.
+`CENDOR_DEBUG_TELEMETRY=1` prints which state you are in.
+
+```ts
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+
+new NodeSDK({ traceExporter: new OTLPTraceExporter() }).start();  // the ONE global setup
+```
+
+To watch a conversation locally rather than wire a hosted backend:
+
+```bash
+docker run --rm -p 3000:3000 -p 4318:4318 -v cendor-monitor-data:/data \
+  ghcr.io/cendorhq/cendor-monitor:0.15.0
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+Cendor Monitor is optional dev tooling — no library depends on it, Cendor never operates a telemetry
+endpoint, and what it shows is an **operational copy**: `verify()` runs on the audit file on your
+host, never on that telemetry. See `cendor-libs/docs/observability.md`.
+
 ## Pins
 
 The npm shelf this recipe was **live-verified against on 2026-07-30** — a record of what was run, not a
