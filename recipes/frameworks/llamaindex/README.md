@@ -16,7 +16,9 @@ LlamaIndex *works alongside* Cendor. Nothing is patched and no LlamaIndex API is
 ```bash
 cd recipes/frameworks/llamaindex
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

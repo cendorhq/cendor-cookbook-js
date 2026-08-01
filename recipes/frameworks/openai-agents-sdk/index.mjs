@@ -31,7 +31,7 @@ function fakeRunner() {
   return {
     on: (name, fn) => {
       if (!handlers.has(name)) handlers.set(name, new Set());
-      handlers.get(name).add(fn);
+      handlers.get(name)?.add(fn);
     },
     off: (name, fn) => handlers.get(name)?.delete(fn),
     emit: (name, ...args) => {
@@ -44,7 +44,7 @@ function fakeClient(usage) {
   return instrument({
     chat: {
       completions: {
-        create: async () => ({
+        create: async (_req) => ({
           choices: [{ message: { content: 'done' } }],
           usage,
           model: MODEL,
@@ -104,8 +104,8 @@ for (const c of calls) {
   const prev = spendByAgent.get(agent) ?? { calls: 0, tokens: 0, usd: null };
   spendByAgent.set(agent, {
     calls: prev.calls + 1,
-    tokens: prev.tokens + c.usage.totalTokens,
-    usd: prev.usd === null ? c.cost.amount : prev.usd.plus(c.cost.amount),
+    tokens: prev.tokens + (c.usage?.totalTokens ?? 0),
+    usd: c.cost === null ? prev.usd : (prev.usd?.plus(c.cost.amount) ?? c.cost.amount),
   });
 }
 

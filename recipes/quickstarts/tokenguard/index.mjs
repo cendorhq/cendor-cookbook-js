@@ -34,7 +34,7 @@ function fakeOpenAI() {
   return {
     chat: {
       completions: {
-        create: async () => ({
+        create: async (_req) => ({
           usage: { prompt_tokens: IN_TOKENS, completion_tokens: OUT_TOKENS },
         }),
       },
@@ -74,8 +74,12 @@ try {
 
 const r = report(['feature']);
 console.log('Turns that actually ran, by feature:');
-for (const row of [...r.rows].sort((a, b) => String(a.tags.feature).localeCompare(String(b.tags.feature)))) {
-  console.log(`  ${String(row.tags.feature).padEnd(11)} ${row.calls} calls   $${row.usd.amount.toString()}`);
+for (const row of [...r.rows].sort((a, b) =>
+  String(a.tags.feature).localeCompare(String(b.tags.feature)),
+)) {
+  console.log(
+    `  ${String(row.tags.feature).padEnd(11)} ${row.calls} calls   $${row.usd.amount.toString()}`,
+  );
 }
 const ran = r.rows.reduce((n, row) => n + row.calls, 0);
 console.log(`  ${'TOTAL'.padEnd(11)} ${ran} calls   $${r.total().amount.toString()}`);

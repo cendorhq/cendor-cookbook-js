@@ -26,7 +26,15 @@ import { appendFileSync, mkdtempSync, readFileSync, statSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bus, instrument } from '@cendor/core';
-import { BudgetEvent, BudgetExceeded, report, reset, track, useSink, withBudget } from '@cendor/tokenguard';
+import {
+  BudgetEvent,
+  BudgetExceeded,
+  report,
+  reset,
+  track,
+  useSink,
+  withBudget,
+} from '@cendor/tokenguard';
 import { QueueSink } from '@cendor/tokenguard/sinks';
 
 const MODEL = 'gpt-4o';
@@ -37,6 +45,8 @@ const MODEL = 'gpt-4o';
  * as a STRING, never a float, so appending it to a file loses no precision.
  */
 class JsonlSink {
+  path;
+
   constructor(path) {
     this.path = path;
     writeFileSync(path, '');
@@ -51,7 +61,7 @@ function fakeOpenAI() {
   return instrument({
     chat: {
       completions: {
-        create: async () => ({
+        create: async (_req) => ({
           choices: [{ message: { content: 'ok' } }],
           usage: { prompt_tokens: 1000, completion_tokens: 200 },
           model: MODEL,
@@ -77,7 +87,10 @@ try {
   for (const tenant of ['acme', 'acme', 'globex']) {
     await track({ tenant }, () =>
       withBudget({ usd: 1.0, onExceed: 'block' }, () =>
-        client.chat.completions.create({ model: MODEL, messages: [{ role: 'user', content: 'hi' }] }),
+        client.chat.completions.create({
+          model: MODEL,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
       ),
     );
   }
@@ -86,7 +99,10 @@ try {
   try {
     await track({ tenant: 'globex' }, () =>
       withBudget({ tokens: 10, onExceed: 'block' }, () =>
-        client.chat.completions.create({ model: MODEL, messages: [{ role: 'user', content: 'hi' }] }),
+        client.chat.completions.create({
+          model: MODEL,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
       ),
     );
   } catch (err) {
@@ -100,20 +116,33 @@ try {
 }
 
 // Read the rows back the way a DIFFERENT process would: straight out of the file.
-const rows = readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+const rows = readFileSync(file, 'utf8')
+  .trim()
+  .split('\n')
+  .map((l) => JSON.parse(l));
 const inMemory = Object.fromEntries(report(['tenant']).rows.map((r) => [r.tags.tenant, r]));
 const last = blocked.at(-1);
 
 console.log(`persisted rows   : ${rows.length} in spend.jsonl (${statSync(file).size} bytes)`);
 for (const r of rows) {
-  console.log(`  ${JSON.stringify(r.tags).padEnd(20)} $${r.usd}  ${r.input_tokens} in / ${r.output_tokens} out`);
+  console.log(
+    `  ${JSON.stringify(r.tags).padEnd(20)} $${r.usd}  ${r.input_tokens} in / ${r.output_tokens} out`,
+  );
 }
-console.log(`in-memory report : acme $${inMemory.acme.usd.amount.toString()} over ${inMemory.acme.calls} calls, globex $${inMemory.globex.usd.amount.toString()}`);
-console.log(`budget events    : ${blocked.length} - action='${last.action}', cap=${last.capTokens} tokens (a blocked call emits no LLMCall, so this is the ONLY signal)`);
-console.log('shutdown         : flush() drained the queue before close() - a background worker would otherwise leave rows unwritten on an abrupt exit');
+console.log(
+  `in-memory report : acme $${inMemory.acme.usd.amount.toString()} over ${inMemory.acme.calls} calls, globex $${inMemory.globex.usd.amount.toString()}`,
+);
+assert.ok(last, 'no BudgetEvent reached the bus — a blocked call leaves no other trace');
+console.log(
+  `budget events    : ${blocked.length} - action='${last.action}', cap=${last.capTokens} tokens (a blocked call emits no LLMCall, so this is the ONLY signal)`,
+);
+console.log(
+  'shutdown         : flush() drained the queue before close() - a background worker would otherwise leave rows unwritten on an abrupt exit',
+);
 
 assert.equal(rows.length, 3, 'one persisted row per call that actually happened');
-if (blocked.length !== 1 || last.action !== 'blocked') throw new Error('the block was not on the bus');
+if (blocked.length !== 1 || last.action !== 'blocked')
+  throw new Error('the block was not on the bus');
 if (!rows.every((r) => 'tenant' in r.tags)) throw new Error('track() tags did not reach the sink');
 assert.ok(
   rows.every((r) => typeof r.usd === 'string'),

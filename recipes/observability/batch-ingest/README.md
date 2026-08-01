@@ -14,7 +14,9 @@ mirror sees it, exactly as if it had been instrumented locally.
 ```bash
 cd recipes/observability/batch-ingest
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

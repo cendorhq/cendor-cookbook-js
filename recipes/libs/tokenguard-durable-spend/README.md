@@ -27,7 +27,9 @@ call refused pre-flight never becomes an `LLMCall` and so never reaches a sink a
 ```bash
 cd recipes/libs/tokenguard-durable-spend
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

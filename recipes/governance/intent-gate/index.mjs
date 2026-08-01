@@ -64,14 +64,19 @@ assert.equal(offDecs[0].action, 'flag');
 assert.ok(offDecs[0].metadata.intent, 'the decision did not record which intent it saw');
 
 // deny-mode + block: refuse a topic outright (here, "billing" is off-limits for this bot).
-const deny = intent.intent(['billing'], { classify, mode: 'deny', threshold: 0.15, action: 'block' });
+const deny = intent.intent(['billing'], {
+  classify,
+  mode: 'deny',
+  threshold: 0.15,
+  action: 'block',
+});
 let blocked = null;
 try {
   apply([deny], 'input', 'I want a refund on my last charge');
 } catch (err) {
   if (!(err instanceof GuardrailTripped)) throw err;
   blocked = err;
-  console.log(`\n=== deny-mode block === ${err.decisions.at(-1).reason}`);
+  console.log(`\n=== deny-mode block === ${err.decisions.at(-1)?.reason}`);
 }
 assert.notEqual(blocked, null, 'deny mode did not block an in-denylist topic');
 

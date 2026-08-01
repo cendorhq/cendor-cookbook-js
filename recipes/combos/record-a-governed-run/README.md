@@ -16,7 +16,9 @@ The `$0` claim is *proven*: the replay pass is handed a client that throws if it
 ```bash
 cd recipes/combos/record-a-governed-run
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

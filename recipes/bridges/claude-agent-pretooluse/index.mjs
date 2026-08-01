@@ -65,12 +65,14 @@ const calls = [
 
 const seen = [];
 for (const c of calls) {
-  const out = await hook(c, 'tool-use-1', { signal: undefined });
+  // The SDK types `hook` as a single-argument handler; the runtime passes (input, toolUseId,
+  // options). Calling it the way the SDK actually calls it means going through the runtime shape.
+  const out = await hook(c);
   const decision = out.hookSpecificOutput?.permissionDecision ?? 'allow';
   seen.push(decision);
   console.log(`${decision.padEnd(5)}  ${JSON.stringify(c.tool_input.command)}`);
   if (decision === 'deny') {
-    console.log(`       -> ${out.hookSpecificOutput.permissionDecisionReason}`);
+    console.log(`       -> ${out.hookSpecificOutput?.permissionDecisionReason}`);
   }
 }
 

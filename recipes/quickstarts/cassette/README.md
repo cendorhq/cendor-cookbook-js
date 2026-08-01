@@ -12,7 +12,9 @@ code path, same assertion, **zero** provider calls, no network, no key.
 ```bash
 cd recipes/quickstarts/cassette
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

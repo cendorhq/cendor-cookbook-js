@@ -19,13 +19,16 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 const server = new McpServer({ name: 'demo', version: '1.0.0' });
-
 /**
  * Wrap a tool handler so `guardrails` run over its arguments before the body.
  *
  * ⚠️ The shape differs from Python: there are no decorators, so this is a higher-order function
  * applied at registration rather than `@gated(...)` stacked above `@mcp.tool()`.
  */
+/** An MCP tool result: the `content` array the protocol returns to the model. */
+// `type` is the LITERAL 'text', not `string` — the MCP SDK's content union is discriminated on
+// it, so a widened `string` is rejected at the registration call.
+
 function gated(guardrails, handler, { stage = 'tool_call' } = {}) {
   return async (args) => {
     try {
@@ -38,7 +41,9 @@ function gated(guardrails, handler, { stage = 'tool_call' } = {}) {
   };
 }
 
-const runShellBody = async ({ command }) => ({ content: [{ type: 'text', text: `ran: ${command}` }] });
+const runShellBody = async ({ command }) => ({
+  content: [{ type: 'text', text: `ran: ${command}` }],
+});
 
 const runShell = gated(
   [rules.keywordDeny(['rm -rf', 'mkfs'], { action: 'block', stage: 'tool_call' })],

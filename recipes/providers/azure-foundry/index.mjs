@@ -74,9 +74,18 @@ function fakeFoundry() {
     },
   };
 }
+/**
+ * `ask` is handed the offline fake AND — under RECORD=1 — a real `OpenAI` client pointed at the
+ * Foundry v1 endpoint, so its parameter is the structural minimum BOTH satisfy rather than either
+ * concrete type. The `any` on the body is honest rather than lazy: the two clients really do take
+ * different request types, and this helper needs none of that detail.
+ */
 
 const ask = (client, text) =>
-  client.chat.completions.create({ model: DEPLOYMENT, messages: [{ role: 'user', content: text }] });
+  client.chat.completions.create({
+    model: DEPLOYMENT,
+    messages: [{ role: 'user', content: text }],
+  });
 
 async function recordLive() {
   const { default: OpenAI } = await import('openai');
@@ -123,15 +132,23 @@ async function offlineDemo() {
     blockedBefore = true;
   }
   const ranBefore = report().rows.reduce((n, row) => n + row.calls, 0);
-  const costBefore = calls.at(-1).cost;
+  const beforeCall = calls.at(-1);
+  assert.ok(beforeCall, 'no LLMCall reached the bus');
+  const costBefore = beforeCall.cost;
   console.log(`deployment: ${DEPLOYMENT}  (a deployment NAME, not a model id)`);
-  console.log(`unpriced  : cost = ${costBefore == null ? 'null' : `$${costBefore.amount.toString()}`}`);
-  console.log(`            a $${CAP_USD} USD cap let all ${ranBefore} calls through — it could not bind.`);
+  console.log(
+    `unpriced  : cost = ${costBefore == null ? 'null' : `$${costBefore.amount.toString()}`}`,
+  );
+  console.log(
+    `            a $${CAP_USD} USD cap let all ${ranBefore} calls through — it could not bind.`,
+  );
   console.log('            ^ nothing errored. That is the danger: it LOOKS governed.');
 
   // ---- ACT TWO: one line ---------------------------------------------------------------------------
   prices.registerDeployment(DEPLOYMENT, { like: BASE_MODEL });
-  console.log(`fix       : prices.registerDeployment(${JSON.stringify(DEPLOYMENT)}, { like: ${JSON.stringify(BASE_MODEL)} })`);
+  console.log(
+    `fix       : prices.registerDeployment(${JSON.stringify(DEPLOYMENT)}, { like: ${JSON.stringify(BASE_MODEL)} })`,
+  );
 
   reset();
   let blockedAfter = false;
@@ -142,12 +159,21 @@ async function offlineDemo() {
     blockedAfter = true;
   }
   const ranAfter = report().rows.reduce((n, row) => n + row.calls, 0);
-  const costAfter = calls.at(-1).cost;
+  const afterCall = calls.at(-1);
+  assert.ok(afterCall, 'no LLMCall reached the bus after registering the price');
+  const costAfter = afterCall.cost;
+  assert.ok(costAfter, 'registering the deployment price did not make the call priceable');
   console.log(`priced    : the SAME call now costs $${costAfter.amount.toString()}`);
-  console.log(`            the SAME cap now blocks after ${ranAfter} call(s) — enforceable at last.`);
+  console.log(
+    `            the SAME cap now blocks after ${ranAfter} call(s) — enforceable at last.`,
+  );
 
   // ---- the rest of the lifecycle, now that money works ----------------------------------------------
-  const audit = new AuditLog('foundry-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
+  const audit = new AuditLog('foundry-bot', {
+    riskTier: 'limited',
+    path: chain,
+    signingKey: SIGNING_KEY,
+  });
   try {
     install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
     try {
@@ -157,8 +183,11 @@ async function offlineDemo() {
       } catch (err) {
         if (!(err instanceof GuardrailTripped)) throw err;
         const trip = err.decisions.at(-1);
+        assert.ok(trip, 'GuardrailTripped carried no decisions');
         console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
-        console.log(`            provider saw ${providerCalls.n - seenBefore} extra call(s) => $0 spent on it`);
+        console.log(
+          `            provider saw ${providerCalls.n - seenBefore} extra call(s) => $0 spent on it`,
+        );
       }
       await audit.decision(async (dec) => dec.record({ model: DEPLOYMENT }), {
         input: 'foundry batch',
@@ -183,7 +212,11 @@ async function offlineDemo() {
 
   // The two halves of the story, both asserted. If a future price table ever learns this deployment
   // name on its own, the first pair fails and the prose above stops being true.
-  assert.equal(costBefore, null, 'the deployment name was priced before registration — premise changed');
+  assert.equal(
+    costBefore,
+    null,
+    'the deployment name was priced before registration — premise changed',
+  );
   assert.equal(blockedBefore, false, 'a USD cap bound on an unpriced deployment — premise changed');
   assert.equal(ranBefore, 8, `all 8 calls should get through unpriced, got ${ranBefore}`);
   assert.ok(costAfter?.amount.gt(0), 'registerDeployment() did not make the deployment priceable');

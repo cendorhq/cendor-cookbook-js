@@ -71,30 +71,50 @@ const client = fakeClient();
 let inside;
 await trace('order-8812-refund', async () => {
   inside = currentTraceId();
-  await client.chat.completions.create({ model: MODEL, messages: [{ role: 'user', content: 'a' }] });
-  await client.chat.completions.create({ model: MODEL, messages: [{ role: 'user', content: 'b' }] });
+  await client.chat.completions.create({
+    model: MODEL,
+    messages: [{ role: 'user', content: 'a' }],
+  });
+  await client.chat.completions.create({
+    model: MODEL,
+    messages: [{ role: 'user', content: 'b' }],
+  });
 });
 await client.chat.completions.create({ model: MODEL, messages: [{ role: 'user', content: 'c' }] });
 
 const grouped = calls.filter((c) => c.traceId === 'order-8812-refund');
+const outside = calls.at(-1);
+assert.ok(outside, 'no LLMCall reached the bus at all');
 console.log(`trace()          : currentTraceId() inside the scope = ${JSON.stringify(inside)}`);
-console.log(`                   ${grouped.length} of ${calls.length} calls carry it; the one outside has traceId=${JSON.stringify(calls.at(-1).traceId)}`);
+console.log(
+  `                   ${grouped.length} of ${calls.length} calls carry it; the one outside has traceId=${JSON.stringify(outside.traceId)}`,
+);
 
 // ---- seam 2: a per-chunk stream observer ---------------------------------------------------------
 const seen = [];
-const meter = (call, deltaText) => {
+const meter = (_call, deltaText) => {
   seen.push(deltaText);
 };
 addStreamObserver(meter);
 let consumed = 0;
 try {
-  const stream = await fakeClient(12).chat.completions.create({ model: MODEL, messages: [], stream: true });
+  // `create` returns a stream OR a plain response depending on `stream:true`, so its inferred type
+  // is that union. The cast is the recipe asserting which branch it asked for.
+  const stream = await fakeClient(12).chat.completions.create({
+    model: MODEL,
+    messages: [],
+    stream: true,
+  });
   for await (const _ of stream) consumed++;
 } finally {
   removeStreamObserver(meter);
 }
-console.log(`stream observer  : ${seen.length} chunk deltas seen for ${consumed} chunks consumed, first delta ${JSON.stringify(seen[0])}`);
-console.log("                   throwing inside the observer CLOSES the provider stream - that is how tokenguard's break works");
+console.log(
+  `stream observer  : ${seen.length} chunk deltas seen for ${consumed} chunks consumed, first delta ${JSON.stringify(seen[0])}`,
+);
+console.log(
+  "                   throwing inside the observer CLOSES the provider stream - that is how tokenguard's break works",
+);
 
 // ---- seam 3: a custom tokenizer for a model nobody bundles ---------------------------------------
 const text = 'the quick brown fox jumps over the lazy dog';
@@ -107,13 +127,20 @@ const before = [tokens.count(text, HOUSE_MODEL), tokens.method(HOUSE_MODEL)];
 tokens.register(tokens.family(HOUSE_MODEL), (t) => Math.max(1, Math.floor(String(t).length / 2)));
 const after = [tokens.count(text, HOUSE_MODEL), tokens.method(HOUSE_MODEL)];
 
-console.log(`tokens.register(): ${HOUSE_MODEL} family=${JSON.stringify(tokens.family(HOUSE_MODEL))}`);
-console.log(`                   before ${before[0]} tokens (method ${JSON.stringify(before[1])}) -> after ${after[0]} tokens (method ${JSON.stringify(after[1])})`);
-console.log('                   every budget, receipt and estimate downstream now uses your counter');
+console.log(
+  `tokens.register(): ${HOUSE_MODEL} family=${JSON.stringify(tokens.family(HOUSE_MODEL))}`,
+);
+console.log(
+  `                   before ${before[0]} tokens (method ${JSON.stringify(before[1])}) -> after ${after[0]} tokens (method ${JSON.stringify(after[1])})`,
+);
+console.log(
+  '                   every budget, receipt and estimate downstream now uses your counter',
+);
 
 bus.unsubscribe(collect);
 
-if (grouped.length !== 2 || calls.at(-1).traceId === 'order-8812-refund') throw new Error('trace() did not group');
+if (grouped.length !== 2 || outside.traceId === 'order-8812-refund')
+  throw new Error('trace() did not group');
 assert.equal(seen.length, 12, 'the stream observer did not see every chunk');
 assert.equal(after[1], 'registered', 'tokens.method() should report the registered counter');
 assert.equal(after[0], Math.floor(text.length / 2), 'the custom counter was not used');

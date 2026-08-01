@@ -22,7 +22,7 @@ function makeClient() {
   return instrument({
     chat: {
       completions: {
-        create: async () => {
+        create: async (_req) => {
           calls.n++;
           return {
             choices: [{ message: { content: 'Refund issued.' } }],

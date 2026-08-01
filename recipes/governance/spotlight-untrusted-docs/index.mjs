@@ -30,13 +30,18 @@ const chain = [
 
 // ⚠️ `evaluate` returns an OBJECT in TypeScript — `{ payload, decisions }` — where Python returns a
 // `(cleaned, decisions)` tuple. Same information, different unpacking.
-const { payload: cleaned, decisions } = evaluate(chain, 'tool_output', RETRIEVED_DOC);
+// `evaluate` returns the payload as `unknown` because a guardrail chain can rewrite it into
+// anything; this chain is text in, text out.
+const { payload, decisions } = evaluate(chain, 'tool_output', RETRIEVED_DOC);
+const cleaned = payload;
 
 console.log('=== the model now sees the doc wrapped as lower-trust data ===');
 console.log(cleaned);
 console.log('\n=== guardrail decisions (local evidence on the bus) ===');
 for (const d of decisions) {
-  console.log(`- ${d.guardrail.padEnd(12)} ${d.action.padEnd(6)} ${d.reason}  metadata=${JSON.stringify(d.metadata)}`);
+  console.log(
+    `- ${d.guardrail.padEnd(12)} ${d.action.padEnd(6)} ${d.reason}  metadata=${JSON.stringify(d.metadata)}`,
+  );
 }
 
 // spotlight always redacts (a mitigation), and the denylist still flagged the exfil URL because

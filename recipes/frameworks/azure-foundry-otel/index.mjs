@@ -27,7 +27,11 @@ import { join } from 'node:path';
 import { AuditLog, OTelMirror, verify } from '@cendor/acttrace';
 import { LLMCall, bus, instrument, prices } from '@cendor/core';
 import { BudgetExceeded, budget, reset } from '@cendor/tokenguard';
-import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-node';
 
 const SIGNING_KEY = 'demo-signing-key';
 const DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT ?? 'prod-gpt4o-eastus';
@@ -39,14 +43,15 @@ const OUT_TOKENS = 1_500;
 // projection is ~nothing, the cap is never crossed before the call, and what you get is a
 // POST-flight overspend — which throws the same `BudgetExceeded` but emits NO `BudgetEvent`, so the
 // refusal never reaches your telemetry backend. Measured while writing this recipe.
-const CLAIM = "The claimant's policy history plus the adjuster's notes and the repair estimate. ".repeat(1000);
+const CLAIM =
+  "The claimant's policy history plus the adjuster's notes and the repair estimate. ".repeat(1000);
 
 /** Stand-in for the v1 GA client. Foundry echoes the DEPLOYMENT name back, not a model id. */
 function fakeFoundry() {
   return {
     chat: {
       completions: {
-        create: async () => ({
+        create: async (_req) => ({
           choices: [{ message: { content: 'Approved.' } }],
           usage: { prompt_tokens: IN_TOKENS, completion_tokens: OUT_TOKENS },
           model: DEPLOYMENT,
@@ -74,12 +79,17 @@ bus.subscribe((e) => {
 
 const client = instrument(fakeFoundry());
 const ask = (text) =>
-  client.chat.completions.create({ model: DEPLOYMENT, messages: [{ role: 'user', content: text }] });
+  client.chat.completions.create({
+    model: DEPLOYMENT,
+    messages: [{ role: 'user', content: text }],
+  });
 
 // (2) make the deployment priceable, or the USD budget below is a silent no-op.
 prices.registerDeployment(DEPLOYMENT, { like: BASE_MODEL });
 const unit = prices.estimate(DEPLOYMENT, IN_TOKENS, { outputTokens: OUT_TOKENS });
-console.log(`deployment : ${DEPLOYMENT} -> priced like ${BASE_MODEL} ($${unit.amount.toString()}/call)`);
+console.log(
+  `deployment : ${DEPLOYMENT} -> priced like ${BASE_MODEL} ($${unit.amount.toString()}/call)`,
+);
 
 const chain = join(mkdtempSync(join(tmpdir(), 'cendor-foundry-otel-')), 'audit.jsonl');
 const audit = new AuditLog('foundry-triage', {
@@ -123,17 +133,27 @@ console.log(`verify(file)   : ${ok} - ${detail}`);
 console.log('\nAzure Monitor sees these as ordinary spans. Nothing Cendor-specific is exported.');
 
 assert.ok(unit.amount.gt(0), 'registerDeployment() did not make the deployment priceable');
-assert.equal(blocked, true, 'the USD cap never bound — the deployment is still effectively unpriced');
-assert.ok(calls.length > 0 && calls.length < 8, `the cap should bind mid-loop, got ${calls.length}`);
+assert.equal(
+  blocked,
+  true,
+  'the USD cap never bound — the deployment is still effectively unpriced',
+);
+assert.ok(
+  calls.length > 0 && calls.length < 8,
+  `the cap should bind mid-loop, got ${calls.length}`,
+);
 assert.ok(spans.length > 0, 'the OTelMirror exported no spans at all');
 // The refusal is the whole point of exporting governance: a blocked call makes no provider request,
 // so this span is the ONLY trace of it that ever reaches your backend.
-assert.ok(budgetSpan, `no audit.budget_event span — a refused call left no trace. got: ${spanNames.join(', ')}`);
+assert.ok(
+  budgetSpan,
+  `no audit.budget_event span — a refused call left no trace. got: ${spanNames.join(', ')}`,
+);
 assert.equal(ok, true, 'the hash-chained file failed verify()');
 
 console.log(
   '\n⚠️ The FILE is the evidence; the spans are an operational copy. `verify()` runs on the file and ' +
     'never on the mirror — losing your telemetry backend must not invalidate the record.\n' +
-    '⚠️ A `model-router` deployment is NOT priceable: it bills at the serving model\'s rates while ' +
-    'reporting the router\'s own id, so no single registration is ever correct.',
+    "⚠️ A `model-router` deployment is NOT priceable: it bills at the serving model's rates while " +
+    "reporting the router's own id, so no single registration is ever correct.",
 );

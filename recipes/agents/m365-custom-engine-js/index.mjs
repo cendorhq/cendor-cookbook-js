@@ -23,17 +23,28 @@ import { ChannelStub, freePort, makeActivity, postTurn } from './channelStub.mjs
 
 const CONVERSATION = 'cookbook-m365';
 const dir = mkdtempSync(join(tmpdir(), 'cendor-m365-'));
-
 /**
  * One agent + one channel stub, both on real localhost ports.
  *
  * Each instance gets its **own** audit chain file: two live `AuditLog`s on one path is refused by
  * design, and a recipe that ran two harnesses over one file would trip over exactly that.
  */
+/** A reply Activity as it comes back off the stub channel. */
+
 class Harness {
+  auditPath;
+  agent;
+  stub;
+  server;
+  port = 0;
+
   constructor(name, { sessionCapUsd, skipAfterTurnHandler = false } = {}) {
     this.auditPath = join(dir, `chain-${name}.jsonl`);
-    this.agent = new GovernedAgent({ auditPath: this.auditPath, sessionCapUsd, skipAfterTurnHandler });
+    this.agent = new GovernedAgent({
+      auditPath: this.auditPath,
+      sessionCapUsd,
+      skipAfterTurnHandler,
+    });
     this.stub = null;
     this.server = null;
   }
@@ -48,19 +59,22 @@ class Harness {
   }
 
   async stop() {
-    if (this.server) await new Promise((r) => this.server.close(() => r()));
-    await this.stub.stop();
+    const server = this.server;
+    if (server) await new Promise((r) => server.close(() => r()));
+    await this.stub?.stop();
     this.agent.close();
   }
 
   async turn(text, { quiet = 0 } = {}) {
+    const stub = this.stub;
+    assert.ok(stub, 'the harness was not started');
     const act = makeActivity(text, {
       conversationId: CONVERSATION,
-      serviceUrl: this.stub.serviceUrl,
+      serviceUrl: stub.serviceUrl,
     });
-    const before = this.stub.messages(CONVERSATION).length;
+    const before = stub.messages(CONVERSATION).length;
     await postTurn(`http://127.0.0.1:${this.port}/api/messages`, act);
-    const msgs = await this.stub.waitFor(CONVERSATION, { count: before + 1, quiet });
+    const msgs = await stub.waitFor(CONVERSATION, { count: before + 1, quiet });
     return msgs.at(-1) ?? {};
   }
 }
@@ -71,7 +85,9 @@ const envelopeOf = (reply) => reply?.channelData?.cendor ?? {};
 // ═══════════════════════════════════════════════════════════════════ the walkthrough
 
 const h = await new Harness('main').start();
-let governed, blockedTurn, redacted;
+let governed = {};
+let blockedTurn = { text: '' };
+let redacted = {};
 try {
   // 1 — an ordinary governed turn: exact usage, a Decimal cost, the envelope on the reply
   governed = envelopeOf(await h.turn('I was double charged, can I get a refund?'));
@@ -99,10 +115,12 @@ const [chainOk, chainDetail] = verify(h.auditPath); // read the chain with no se
 //     reserves the full `max_tokens` while a real answer spends a fraction. Both refusals are correct
 //     and zero-spend; they are just different sentences.
 const s = await new Harness('stream', { sessionCapUsd: new Decimal('0.00002') }).start();
-let streamed, capped, streamActivities;
+let streamed = {};
+let capped = { text: '' };
+let streamActivities = 0;
 try {
   streamed = envelopeOf(await s.turn('/stream Tell me everything about refunds', { quiet: 350 }));
-  streamActivities = s.stub.allFor(CONVERSATION).length;
+  streamActivities = s.stub?.allFor(CONVERSATION).length ?? 0;
   const c = await s.turn('anything else?');
   capped = { ...envelopeOf(c), text: c.text ?? '' };
 } finally {
@@ -111,7 +129,7 @@ try {
 
 // 6 — (A) on its own: a cap smaller than the estimate refuses before the model is called
 const p = await new Harness('preflight', { sessionCapUsd: new Decimal('0.000001') }).start();
-let preflightTurn;
+let preflightTurn = { text: '' };
 try {
   const r = await p.turn('hello');
   preflightTurn = { ...envelopeOf(r), text: r.text ?? '' };
@@ -172,9 +190,13 @@ const replayed = await using(tape, { mode: 'replay' }, () => drive('replay'));
 // ═══════════════════════════════════════════════════════════════════ report
 
 console.log('--- one governed turn ------------------------------------------');
-console.log(`  tokens      : ${governed.input_tokens} in / ${governed.output_tokens} out   (${governed.model})`);
+console.log(
+  `  tokens      : ${governed.input_tokens} in / ${governed.output_tokens} out   (${governed.model})`,
+);
 console.log(`  cost        : $${governed.cost_usd}   Decimal, priced from the snapshot`);
-console.log(`  session     : $${governed.session_spent_usd} of $${governed.session_cap_usd}  (in TurnState)`);
+console.log(
+  `  session     : $${governed.session_spent_usd} of $${governed.session_cap_usd}  (in TurnState)`,
+);
 console.log(`  trace_id    : ${governed.trace_id}`);
 console.log('--- governance that fired --------------------------------------');
 console.log(`  input gate  : ${blockedTurn.governance} -> ${JSON.stringify(blockedTurn.text)}`);
@@ -205,8 +227,8 @@ assert.ok(chainOk, chainDetail);
 // the input gate: a block reaches the channel as a refusal, not as an error
 assert.equal(blockedTurn.governance, 'input_blocked');
 assert.ok(!blockedTurn.text.toLowerCase().includes('hit an error'));
-assert.ok(blockedTurn.decisions.some((d) => d.includes('prompt_injection')));
-assert.ok(redacted.decisions.some((d) => d.includes('email_redact')));
+assert.ok(blockedTurn.decisions?.some((d) => d.includes('prompt_injection')));
+assert.ok(redacted.decisions?.some((d) => d.includes('email_redact')));
 
 // (E) the mid-stream break, and the channel still got a clean close
 assert.equal(streamed.governance, 'broke_on_budget');
@@ -226,10 +248,12 @@ assert.ok(!preflightTurn.text.includes('reached'));
 // TurnState and reports the sum. WITHOUT it, `state.save()` never runs, so every turn reads a $0
 // ledger and reports only its own cost — the number keeps *looking* plausible while the cumulative
 // cap can never bind. Measured: 2x vs 1x the per-turn cost.
-assert.ok(new Decimal(withHandler).equals(new Decimal(withoutHandler).times(2)), {
-  withHandler,
-  withoutHandler,
-});
+// `assert.ok`'s second argument is a message, not a data bag — interpolate so a failure actually
+// prints the two numbers being compared.
+assert.ok(
+  new Decimal(withHandler).equals(new Decimal(withoutHandler).times(2)),
+  `expected the cumulative ledger to be 2x one turn: withHandler=${withHandler} withoutHandler=${withoutHandler}`,
+);
 assert.ok(new Decimal(withoutHandler).greaterThan(0), 'the per-turn cost itself is unaffected');
 
 console.log('\nall assertions passed');

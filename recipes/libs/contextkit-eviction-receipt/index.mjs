@@ -55,7 +55,9 @@ const receipt = ctx.report();
 
 const raw = tokens.count(RULES + POLICY + RETRIEVED, MODEL) + tokens.count(HISTORY, MODEL);
 console.log(`raw input        : ${raw.toLocaleString('en-US')} tokens`);
-console.log(`budget           : ${receipt.budget} tokens (${receipt.reservedOutput} reserved for the answer)`);
+console.log(
+  `budget           : ${receipt.budget} tokens (${receipt.reservedOutput} reserved for the answer)`,
+);
 console.log(`used             : ${receipt.used} tokens in ${messages.length} messages`);
 console.log('the receipt      :');
 for (const d of receipt.decisions) {
@@ -72,12 +74,20 @@ console.log(`whatif()         : ${projections.map(([b, u]) => `${b}->${u}`).join
 console.log(`                   committed report untouched: ${ctx.report().used === committed}`);
 
 const pinned = receipt.decisions.find((d) => d.role === 'system' && d.action === 'kept');
-console.log(`pinned block     : ${pinned.action} at every budget - it is the reason the agent works`);
+assert.ok(pinned, 'the pinned system block was not kept — the whole point of pin:true');
+console.log(
+  `pinned block     : ${pinned.action} at every budget - it is the reason the agent works`,
+);
 
-if (receipt.used > receipt.budget - receipt.reservedOutput) throw new Error('the assembly overshot');
-assert.ok(receipt.decisions.some((d) => d.action !== 'kept'), 'nothing was evicted');
+if (receipt.used > receipt.budget - receipt.reservedOutput)
+  throw new Error('the assembly overshot');
+assert.ok(
+  receipt.decisions.some((d) => d.action !== 'kept'),
+  'nothing was evicted',
+);
 for (let i = 0; i < projections.length - 1; i++) {
-  if (projections[i][1] < projections[i + 1][1]) throw new Error('whatif() used grew as the budget shrank');
+  if (projections[i][1] < projections[i + 1][1])
+    throw new Error('whatif() used grew as the budget shrank');
 }
 assert.equal(ctx.report().used, committed, 'whatif() mutated the committed report');
 assert.ok(JSON.stringify(messages).includes(RULES), 'the pinned block was evicted');

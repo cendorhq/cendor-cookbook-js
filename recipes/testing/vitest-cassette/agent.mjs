@@ -11,10 +11,12 @@ function client() {
   return instrument({
     chat: {
       completions: {
-        create: async () => {
+        create: async (_req) => {
           providerCalls.n++;
           return {
-            choices: [{ message: { content: 'A duplicate charge is refunded within 5 business days.' } }],
+            choices: [
+              { message: { content: 'A duplicate charge is refunded within 5 business days.' } },
+            ],
             usage: { prompt_tokens: 42, completion_tokens: 14 },
             model: 'gpt-4o',
           };

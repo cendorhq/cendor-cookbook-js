@@ -14,7 +14,9 @@ tamper-evident file, and the chain still verifies.
 ```bash
 cd recipes/combos/break-midstream-audited
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

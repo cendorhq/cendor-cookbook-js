@@ -80,12 +80,15 @@ try {
       serviceUrl: stub.serviceUrl,
     }),
   );
-  console.log(`message    : message -> HTTP ${status} (accepted; the reply arrives on the channel)`);
+  console.log(
+    `message    : message -> HTTP ${status} (accepted; the reply arrives on the channel)`,
+  );
   assert.ok([200, 202].includes(status), `the message Activity was rejected with HTTP ${status}`);
 
   const msgs = await stub.waitFor(CONVERSATION, { count: 1, timeout: 30_000 });
   assert.ok(msgs.length, 'the agent never replied — nothing reached the channel');
   const reply = msgs.at(-1);
+  assert.ok(reply, 'the agent never replied — nothing reached the channel');
   const text = (reply.text ?? '').trim();
   console.log(`reply      : ${JSON.stringify(text.slice(0, 90))}`);
   assert.ok(text, 'the agent replied with an empty message');

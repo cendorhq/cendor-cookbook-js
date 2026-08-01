@@ -85,7 +85,6 @@ const CONTEXT_BUDGET_TOKENS = 1200;
 // dotted-path string. Same conversation scope, different ergonomics.
 const SPEND_PROP = 'cendorSpentUsd';
 const HISTORY_PROP = 'cendorHistory';
-
 // ───────────────────────────────────────────── the instrumented client (one line, at startup)
 
 /**
@@ -100,6 +99,8 @@ const HISTORY_PROP = 'cendorHistory';
  *
  * The fake below keeps this recipe offline and keyless.
  */
+/** The OpenAI-shaped request this host sends — `stream` decides which branch the fake takes. */
+
 export function makeClient() {
   const completions = {
     async create(kw) {
@@ -119,10 +120,25 @@ export function makeClient() {
 
 /** An OpenAI-shaped chunk stream, so the (E) breaker has real chunks to break on. */
 async function* fakeStream(kw) {
-  const words = ['Here', ' is', ' a', ' long', ' answer', ' that', ' keeps', ' going', ' and', ' on'];
+  const words = [
+    'Here',
+    ' is',
+    ' a',
+    ' long',
+    ' answer',
+    ' that',
+    ' keeps',
+    ' going',
+    ' and',
+    ' on',
+  ];
   for (let i = 0; i < 6; i++) {
     for (const w of words) {
-      yield { model: kw.model, choices: [{ delta: { content: w }, finish_reason: null }], usage: null };
+      yield {
+        model: kw.model,
+        choices: [{ delta: { content: w }, finish_reason: null }],
+        usage: null,
+      };
     }
   }
 }
@@ -158,11 +174,13 @@ export function installTurnAmbient() {
 export async function turnScope(context, fn) {
   const act = context.activity;
   const stamp = {
-    conversation: act.conversation.id,
+    conversation: act.conversation?.id ?? '',
     channel: act.channelId,
     turn_activity_id: act.id ?? '',
   };
-  return TURN.run(stamp, () => trace(`${stamp.conversation}:${stamp.turn_activity_id}`, () => fn(stamp)));
+  return TURN.run(stamp, () =>
+    trace(`${stamp.conversation}:${stamp.turn_activity_id}`, () => fn(stamp)),
+  );
 }
 
 // ─────────────────────────────────────────────────── guardrails on the channel boundary
@@ -179,7 +197,11 @@ const inputGate = () => [
 ];
 
 const outputGate = () => [
-  rules.keywordDeny(['internal-only'], { stage: 'output', action: 'block', name: 'disclosure_deny' }),
+  rules.keywordDeny(['internal-only'], {
+    stage: 'output',
+    action: 'block',
+    name: 'disclosure_deny',
+  }),
   rules.regexRule(/\bsk-[A-Za-z0-9]{8,}\b/g, {
     action: 'redact',
     stage: 'output',
@@ -212,7 +234,7 @@ async function gate(guardrails, stage, payload, conversationId) {
         payload,
         decisions: decisions.length
           ? decisions
-          : [{ guardrail: err.guardrail ?? 'guardrail', stage, action: 'block' }],
+          : [{ guardrail: 'guardrail', stage, action: 'block' }],
       };
     }
     throw err;
@@ -258,7 +280,9 @@ async function assemblePrompt(history, userText) {
     const blob = history.map((m) => `${m.role}: ${m.content}`).join('\n');
     if (blob.length > 1200) {
       const [text] = compress(blob, { kind: 'prose', targetTokens: 256, model: MODEL });
-      ctx.add(new Block(`Earlier conversation (compressed):\n${text}`, { role: 'system', priority: 50 }));
+      ctx.add(
+        new Block(`Earlier conversation (compressed):\n${text}`, { role: 'system', priority: 50 }),
+      );
     } else {
       ctx.add(new Block({ messages: history, priority: 50, evict: 'drop_oldest' }));
     }
@@ -266,14 +290,28 @@ async function assemblePrompt(history, userText) {
   ctx.add(new Block(userText, { role: 'user', priority: 90, pin: true }));
   return await ctx.assemble();
 }
-
 // ────────────────── (C) the per-conversation cap, held in the host's own TurnState
 //
 // tokenguard budgets are scope-shaped: they live and die with a callback. Conversations are
 // long-lived. The bridge is the hosting SDK's own conversation-scoped state, so the cap survives
 // turns — and, with Blob/Cosmos storage instead of MemoryStorage, process restarts.
 
+/**
+ * The slice of the M365 `TurnState` this host touches. The SDK's `DefaultConversationState` has no
+ * index signature, so this is written as a structural read/write view over the one
+ * conversation-scoped property the ledger uses rather than as a supertype of the SDK's own state.
+ */
+/** One chat turn as this host stores it. */
+/**
+ * The SDK's own turn context. Using the real type rather than a hand-rolled stand-in is what makes
+ * `conversation` correctly OPTIONAL below — the Activity schema does not guarantee it.
+ */
+
 export class SpendLedger {
+  state;
+  capUsd;
+  turnCapUsd;
+
   constructor(state, capUsd = SESSION_CAP_USD, turnCapUsd = TURN_CAP_USD) {
     this.state = state;
     this.capUsd = capUsd;
@@ -334,7 +372,9 @@ function turnBudget(allowance, { conversationId, stream = false }, cb) {
 function preflight(messages, allowance) {
   try {
     const text = messages.map((m) => String(m.content ?? '')).join('\n');
-    const est = prices.estimate(MODEL, tokens.count(text, MODEL), { outputTokens: MAX_OUTPUT_TOKENS });
+    const est = prices.estimate(MODEL, tokens.count(text, MODEL), {
+      outputTokens: MAX_OUTPUT_TOKENS,
+    });
     if (!est) return true;
     const amount = new Decimal(est.amount.toString());
     return amount.lte(0) ? true : amount.lte(allowance);
@@ -342,12 +382,13 @@ function preflight(messages, allowance) {
     return true;
   }
 }
-
 // ─────────────────── the reply envelope, attached in the handler
 //
 // `FoundryAdapter` is **not** used here, on purpose. That adapter belongs to the separate Azure AI
 // Foundry integration; the M365 Agents SDK owns its own Activity plumbing, so the envelope is three
 // lines on the reply Activity. Using both would duplicate the host's plumbing.
+
+/** The governance envelope this host attaches to every reply Activity. */
 
 function channelDataFor(envelope) {
   const payload = {};
@@ -370,14 +411,24 @@ async function reply(context, text, envelope) {
   activity.channelData = { ...(activity.channelData ?? {}), ...channelDataFor(envelope) };
   await context.sendActivity(activity);
 }
-
 // ═══════════════════════════════════════════════════════════════════ the agent
+
+/** Constructor options for {@link GovernedAgent}. */
 
 export class GovernedAgent {
   /**
    * @param opts.skipAfterTurnHandler  **Do not set this in real code.** It exists so the recipe can
    *   demonstrate the trap below with a negative control, instead of just asserting the happy path.
    */
+  client;
+  inGate;
+  outGate;
+  sessionCapUsd;
+  ambient;
+  audit;
+  interceptor;
+  app;
+
   constructor({
     auditPath,
     storage = new MemoryStorage(),
@@ -415,21 +466,28 @@ export class GovernedAgent {
 
   register() {
     this.app.onActivity(ActivityTypes.Message, async (context, state) => {
+      // `DefaultConversationState` carries no index signature; the ledger addresses its own
+      // namespaced property, so the state is viewed through the structural type above.
+      const turnState = state;
       let text = (context.activity.text ?? '').trim();
       const streamed = text.startsWith('/stream ');
       if (streamed) text = text.slice('/stream '.length);
-      const cid = context.activity.conversation.id;
-      const ledger = new SpendLedger(state, this.sessionCapUsd);
+      const cid = context.activity.conversation?.id ?? '';
+      const ledger = new SpendLedger(turnState, this.sessionCapUsd);
 
       // (D) every bus event raised below carries this turn's identity and one trace id
       await turnScope(context, async () => {
         // (C) the cheapest refusal there is: the cap is gone, so no model call happens
         if (ledger.exhausted) {
-          await reply(context, "This conversation has used its budget, so I didn't call the model.", {
-            governance: 'session_cap_reached',
-            session_spent_usd: ledger.spent.toString(),
-            session_cap_usd: ledger.capUsd.toString(),
-          });
+          await reply(
+            context,
+            "This conversation has used its budget, so I didn't call the model.",
+            {
+              governance: 'session_cap_reached',
+              session_spent_usd: ledger.spent.toString(),
+              session_cap_usd: ledger.capUsd.toString(),
+            },
+          );
           return;
         }
 
@@ -448,7 +506,7 @@ export class GovernedAgent {
           return;
         }
 
-        const history = state.conversation[HISTORY_PROP] ?? [];
+        const history = turnState.conversation[HISTORY_PROP] ?? [];
         const messages = await assemblePrompt(history, String(inGated.payload));
         const allowance = ledger.turnAllowance();
 
@@ -457,11 +515,15 @@ export class GovernedAgent {
         // to fire is already below the estimate — the turn would be refused before a chunk existed.
         // A stream's fuse IS the breaker.
         if (!streamed && !preflight(messages, allowance)) {
-          await reply(context, "That request would exceed what's left of this conversation's budget.", {
-            governance: 'preflight_refused',
-            session_spent_usd: ledger.spent.toString(),
-            session_cap_usd: ledger.capUsd.toString(),
-          });
+          await reply(
+            context,
+            "That request would exceed what's left of this conversation's budget.",
+            {
+              governance: 'preflight_refused',
+              session_spent_usd: ledger.spent.toString(),
+              session_cap_usd: ledger.capUsd.toString(),
+            },
+          );
           return;
         }
 
@@ -513,10 +575,12 @@ export class GovernedAgent {
 
         const outGated = await gate(this.outGate, 'output', answer, cid);
         const outHit = blocked(outGated.decisions);
-        const safeAnswer = outHit ? 'I generated a response our output policy blocked.' : outGated.payload;
+        const safeAnswer = outHit
+          ? 'I generated a response our output policy blocked.'
+          : outGated.payload;
 
         const total = ledger.add(cost); // (C) write the cap back into TurnState
-        state.conversation[HISTORY_PROP] = [
+        turnState.conversation[HISTORY_PROP] = [
           ...history,
           { role: 'user', content: String(inGated.payload) },
           { role: 'assistant', content: String(safeAnswer) },
@@ -531,7 +595,9 @@ export class GovernedAgent {
           output_tokens: usageOut || undefined,
           session_spent_usd: total.toString(),
           session_cap_usd: ledger.capUsd.toString(),
-          decisions: [...inGated.decisions, ...outGated.decisions].map((d) => `${d.guardrail}:${d.action}`),
+          decisions: [...inGated.decisions, ...outGated.decisions].map(
+            (d) => `${d.guardrail}:${d.action}`,
+          ),
         };
         // A streamed turn already flushed its text, so the envelope rides a final activity.
         await reply(context, streamed ? '' : String(safeAnswer), envelope);
@@ -549,7 +615,7 @@ export class GovernedAgent {
       return await this.client.chat.completions.create({ ...kw, [CAP_PARAM]: cap });
     } catch (err) {
       const other = CAP_PARAM === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens';
-      const text = String(err?.message ?? err);
+      const text = err instanceof Error ? err.message : String(err);
       if (!text.includes(other) || !text.includes('nsupported')) throw err;
       CAP_PARAM = other;
       return await this.client.chat.completions.create({ ...kw, [CAP_PARAM]: cap });
@@ -561,10 +627,14 @@ export class GovernedAgent {
       const resp = await turnBudget(allowance, { conversationId: 'turn' }, () =>
         this.create(MAX_OUTPUT_TOKENS, { model: MODEL, messages }),
       );
-      return { text: resp.choices[0].message.content ?? '', broke: false };
+      const message = resp.choices[0].message;
+      return { text: message.content ?? '', broke: false };
     } catch (err) {
       if (!(err instanceof BudgetExceeded)) throw err;
-      return { text: "I stopped before calling the model — this turn's budget was already spent.", broke: true };
+      return {
+        text: "I stopped before calling the model — this turn's budget was already spent.",
+        broke: true,
+      };
     }
   }
 
@@ -583,7 +653,10 @@ export class GovernedAgent {
     const collected = [];
     let broke = false;
     try {
-      await turnBudget(allowance, { conversationId: context.activity.conversation.id, stream: true }, async () => {
+      const conversationId = context.activity.conversation?.id ?? '';
+      await turnBudget(allowance, { conversationId, stream: true }, async () => {
+        // `create` returns a stream OR a plain response depending on `stream`, so its inferred type
+        // is that union; the cast is this call site asserting which branch it asked for.
         const providerStream = await this.create(512, {
           model: MODEL,
           messages,

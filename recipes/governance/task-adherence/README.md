@@ -14,7 +14,9 @@ instrumented, so the alignment check's own spend is measured.
 ```bash
 cd recipes/governance/task-adherence
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

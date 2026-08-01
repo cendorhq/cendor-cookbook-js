@@ -65,9 +65,15 @@ const SAMPLES = {
 SAMPLES.prose = SAMPLES.prose.repeat(25);
 
 const pad = (s, n) => String(s).padEnd(n);
-console.log(`${pad('kind', 7)} ${pad('detect()', 8)} ${pad('fidelity', 10)} ${pad('tokens', 18)} ${pad('ratio', 7)} technique`);
+console.log(
+  `${pad('kind', 7)} ${pad('detect()', 8)} ${pad('fidelity', 10)} ${pad('tokens', 18)} ${pad('ratio', 7)} technique`,
+);
 const results = [];
+// `Object.entries` widens the key back to `string`; squeeze narrows `kind` to a literal union,
+// so the cast restores what the object literal already knew.
 for (const [kind, content] of Object.entries(SAMPLES)) {
+  // `as const` matters: squeeze narrows `kind`/`fidelity` to string-literal unions on purpose, so a
+  // bare string[] is rejected. That narrowing is the Type Teach guardrail doing its job.
   for (const fidelity of ['lossless', 'balanced', 'aggressive']) {
     const [small, handle] = compress(content, { kind, fidelity, model: MODEL });
     const before = tokens.count(content, MODEL);
@@ -76,15 +82,24 @@ for (const [kind, content] of Object.entries(SAMPLES)) {
     results.push({ before, after, exact });
     const nums = `${before.toLocaleString('en-US').padStart(6)} -> ${after.toLocaleString('en-US').padStart(6)}`;
     const ratio = `${((100 * after) / before).toFixed(1)}%`.padStart(6);
-    console.log(`${pad(kind, 7)} ${pad(detect(content), 8)} ${pad(fidelity, 10)} ${nums}  ${ratio}   ${handle.technique}`);
+    console.log(
+      `${pad(kind, 7)} ${pad(detect(content), 8)} ${pad(fidelity, 10)} ${nums}  ${ratio}   ${handle.technique}`,
+    );
   }
 }
 
-const [auto, autoHandle] = compress(SAMPLES.logs, { kind: 'auto', targetTokens: 400, model: MODEL });
-console.log(`\nauto    detected ${detect(SAMPLES.logs)}, target 400 -> ${tokens.count(auto, MODEL)} tokens (${autoHandle.technique})`);
+const [auto, autoHandle] = compress(SAMPLES.logs, {
+  kind: 'auto',
+  targetTokens: 400,
+  model: MODEL,
+});
+console.log(
+  `\nauto    detected ${detect(SAMPLES.logs)}, target 400 -> ${tokens.count(auto, MODEL)} tokens (${autoHandle.technique})`,
+);
 console.log('every row above is reversible: handle.expand() returned the original byte-for-byte');
 
 if (!results.every((r) => r.exact)) throw new Error('a compression was not reversible');
 if (!results.every((r) => r.after <= r.before)) throw new Error("a 'compression' grew the input");
 assert.equal(autoHandle.expand(), SAMPLES.logs, 'the auto-detected compression was not reversible');
-if (detect(SAMPLES.json) !== 'json' || detect(SAMPLES.logs) !== 'logs') throw new Error('detect() missed');
+if (detect(SAMPLES.json) !== 'json' || detect(SAMPLES.logs) !== 'logs')
+  throw new Error('detect() missed');

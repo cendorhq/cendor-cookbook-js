@@ -10,10 +10,13 @@ package-lock.json
 npm-debug.log*
 .npm/
 
-# Build output (no recipe compiles today — recipes are plain .mjs run by node — but a future
-# TypeScript-source recipe would land here).
+# Build output. Recipes are TypeScript-source (`index.mts`) with the runnable `index.mjs` GENERATED
+# beside them and COMMITTED — that committed .mjs is a product, not build output, so it is not
+# ignored. What is ignored: tsc bookkeeping and the scratch tree `build-recipes.mjs` formats in
+# before comparing (normally removed at the end of a run; left behind only if one crashes).
 dist/
 *.tsbuildinfo
+.recipe-build/
 
 # Secrets & local config — recipes run offline with NO key; never commit one.
 .env

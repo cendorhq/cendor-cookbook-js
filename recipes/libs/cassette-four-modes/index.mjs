@@ -29,21 +29,25 @@ const OTHER = [{ role: 'user', content: 'who approved order 8812?' }];
 
 /** A fake provider whose answer changes, and which counts how often it is really reached. */
 function provider(answer) {
-  const state = { calls: 0 };
-  state.client = instrument({
-    chat: {
-      completions: {
-        create: async () => {
-          state.calls++;
-          return {
-            choices: [{ message: { content: answer } }],
-            usage: { prompt_tokens: 24, completion_tokens: 9 },
-            model: MODEL,
-          };
+  // One expression, because an object that grows properties after `{ calls: 0 }` has already been
+  // inferred as having none of them.
+  const state = {
+    calls: 0,
+    client: instrument({
+      chat: {
+        completions: {
+          create: async (_req) => {
+            state.calls++;
+            return {
+              choices: [{ message: { content: answer } }],
+              usage: { prompt_tokens: 24, completion_tokens: 9 },
+              model: MODEL,
+            };
+          },
         },
       },
-    },
-  });
+    }),
+  };
   return state;
 }
 
@@ -61,7 +65,9 @@ const p2 = provider('never reached');
 const out = await cassette.using(tape, { mode: 'replay' }, () =>
   p2.client.chat.completions.create({ model: MODEL, messages: ASK }),
 );
-console.log(`replay   : provider ${p2.calls}x -> ${JSON.stringify(out.choices[0].message.content)}`);
+console.log(
+  `replay   : provider ${p2.calls}x -> ${JSON.stringify(out.choices[0].message.content)}`,
+);
 
 const p3 = provider('never reached');
 let unrecorded = null;
@@ -73,6 +79,7 @@ try {
   if (!(err instanceof CassetteError)) throw err;
   unrecorded = String(err.message).split('\n')[0];
 }
+assert.ok(unrecorded, 'replay mode accepted a call that was never recorded');
 console.log(`           an UNRECORDED call throws: ${unrecorded.slice(0, 78)}`);
 
 // ---- auto: replays here, but would have recorded if the file were missing -----------------------
@@ -85,7 +92,9 @@ const p5 = provider('recorded on first use');
 await cassette.using(missing, { mode: 'auto' }, () =>
   p5.client.chat.completions.create({ model: MODEL, messages: ASK }),
 );
-console.log(`auto     : existing tape -> provider ${p4.calls}x (replayed); missing tape -> provider ${p5.calls}x (recorded)`);
+console.log(
+  `auto     : existing tape -> provider ${p4.calls}x (replayed); missing tape -> provider ${p5.calls}x (recorded)`,
+);
 
 // ---- rerecord: run live, report what changed, leave the tape alone ------------------------------
 const before = readFileSync(tape);
@@ -94,15 +103,19 @@ await cassette.using(tape, { mode: 'rerecord' }, () =>
   p6.client.chat.completions.create({ model: MODEL, messages: ASK }),
 );
 const changes = cassette.drift();
-console.log(`rerecord : provider ${p6.calls}x -> drift() reports ${changes.length} divergence(s); tape unchanged on disk: ${readFileSync(tape).equals(before)}`);
+console.log(
+  `rerecord : provider ${p6.calls}x -> drift() reports ${changes.length} divergence(s); tape unchanged on disk: ${readFileSync(tape).equals(before)}`,
+);
 
 // ---- no scope at all ----------------------------------------------------------------------------
 const p7 = provider('live');
 await p7.client.chat.completions.create({ model: MODEL, messages: ASK });
 console.log(`no scope : provider ${p7.calls}x - nothing is intercepted; this is production`);
 
-if (p1.calls !== 1 || p2.calls !== 0 || p4.calls !== 0) throw new Error('replay must not reach the provider');
+if (p1.calls !== 1 || p2.calls !== 0 || p4.calls !== 0)
+  throw new Error('replay must not reach the provider');
 assert.notEqual(unrecorded, null, 'replay must THROW on an unrecorded call, not fall through');
 assert.equal(p5.calls, 1, 'auto should have recorded against a missing tape');
-if (p6.calls !== 1 || changes.length === 0) throw new Error('rerecord must run live and report the divergence');
+if (p6.calls !== 1 || changes.length === 0)
+  throw new Error('rerecord must run live and report the divergence');
 assert.ok(readFileSync(tape).equals(before), 'rerecord overwrote the tape');

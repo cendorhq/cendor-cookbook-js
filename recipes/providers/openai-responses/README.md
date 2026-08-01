@@ -30,7 +30,9 @@ They surface as `usage.cachedTokens` and `usage.reasoningTokens`.
 ```bash
 cd recipes/providers/openai-responses
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

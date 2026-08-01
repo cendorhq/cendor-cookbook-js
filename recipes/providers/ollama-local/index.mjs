@@ -77,7 +77,11 @@ const tmp = mkdtempSync(join(tmpdir(), 'cendor-ollama-'));
 const chain = join(tmp, 'audit.jsonl');
 const tape = join(tmp, 'ollama.cassette.json');
 
-const audit = new AuditLog('local-bot', { riskTier: 'minimal', path: chain, signingKey: SIGNING_KEY });
+const audit = new AuditLog('local-bot', {
+  riskTier: 'minimal',
+  path: chain,
+  signingKey: SIGNING_KEY,
+});
 let ran = 0;
 try {
   install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
@@ -87,8 +91,11 @@ try {
     } catch (err) {
       if (!(err instanceof GuardrailTripped)) throw err;
       const trip = err.decisions.at(-1);
+      assert.ok(trip, 'GuardrailTripped carried no decisions');
       console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
-      console.log(`            the daemon saw ${providerCalls.n} call(s) — a gate is not about money`);
+      console.log(
+        `            the daemon saw ${providerCalls.n} call(s) — a gate is not about money`,
+      );
     }
 
     // A TOKEN cap is the right control here: it needs no rate, so it binds identically whether or
@@ -126,13 +133,18 @@ try {
 }
 
 // The honest bit. Print what is actually true about cost, whatever that turns out to be.
-const one = calls.find((c) => c.usage.inputTokens > 0);
+// `usage` is nullable on LLMCall, so the predicate has to say so — and `find` returns
+// `T | undefined`, which the assert turns into a named failure instead of a TypeError.
+const one = calls.find((c) => (c.usage?.inputTokens ?? 0) > 0);
+assert.ok(one?.usage, 'no call on the bus carried normalized usage');
 const costLabel =
   one.cost == null
     ? 'null — no price row for this id, and nothing was invented'
     : `$${one.cost.amount.toString()} (a $0.00 snapshot row — a local model has no invoice)`;
 console.log('cost      : ' + costLabel);
-console.log(`tokens    : ${one.usage.inputTokens} in + ${one.usage.outputTokens} out — EXACT either way`);
+console.log(
+  `tokens    : ${one.usage.inputTokens} in + ${one.usage.outputTokens} out — EXACT either way`,
+);
 
 const before = providerCalls.n;
 await cassette.using(tape, { mode: 'record' }, () => ask('Say hi in five words.'));
@@ -147,7 +159,10 @@ console.log(`verify()  : ${ok} - ${detail}`);
 // A local model's *cost* is the one thing this recipe will not assert a number for — that is the
 // omission it exists to document. Everything else is exact and is asserted.
 assert.ok(one, 'no local call reached the bus — `chat` on the client was not detected');
-assert.ok(one.usage.inputTokens > 0 && one.usage.outputTokens > 0, 'ollama usage was not normalized');
+assert.ok(
+  one.usage.inputTokens > 0 && one.usage.outputTokens > 0,
+  'ollama usage was not normalized',
+);
 // ⚠️ NOT `cost == null || isZero() || gt(0)` — that covers every possible value and can never fail.
 // A local model must be null (no row) or exactly zero (a $0.00 row). A POSITIVE cost would mean
 // something invented a rate for a model nobody bills you for, which is the one outcome to catch.
@@ -168,7 +183,10 @@ if (LIVE) {
       'calibrated against a stand-in is a control that cannot fire — measure your own traffic.',
   );
 } else {
-  assert.ok(ran > 0 && ran < 20, `offline, the 8,000-token cap should bind mid-loop, got ${ran} calls`);
+  assert.ok(
+    ran > 0 && ran < 20,
+    `offline, the 8,000-token cap should bind mid-loop, got ${ran} calls`,
+  );
 }
 assert.equal(extra, 0, 'a replayed call must not reach the daemon');
 assert.equal(ok, true, 'the audit chain failed verify()');

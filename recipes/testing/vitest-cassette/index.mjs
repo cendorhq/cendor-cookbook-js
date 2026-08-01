@@ -26,10 +26,15 @@ import { startVitest } from 'vitest/node';
 const here = dirname(fileURLToPath(import.meta.url));
 
 console.log('running the vitest suite (offline, no key)…\n');
-const vitest = await startVitest('test', [], { root: here, watch: false });
+// ⚠️ Collect the GENERATED `.mjs` explicitly. Every recipe file here exists twice — `agent.test.mts`
+// is the typed source, `agent.test.mjs` is generated from it — and vitest's default glob matches
+// BOTH, so the suite silently runs twice (measured: 2 files / 4 tests for one 2-test suite).
+// The `.mjs` is the one that executes, exactly as `node index.mjs` does everywhere else.
+const vitest = await startVitest('test', ['agent.test.mjs'], { root: here, watch: false });
 await vitest?.close();
 
 const files = vitest?.state.getFiles() ?? [];
+// A vitest `Task` is a union of file / suite / test, and only the first two carry `tasks`.
 const tests = files.flatMap((f) => f.tasks ?? []).flatMap((s) => s.tasks ?? s);
 const failed = files.filter((f) => f.result?.state === 'fail');
 

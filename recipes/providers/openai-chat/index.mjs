@@ -42,12 +42,12 @@ const CONTEXT = "The customer's ticket history plus the retrieved policy docs. "
 // far longer. The figure is a property of this fixture, not of gpt-4o.
 const IN_TOKENS = 12_000;
 const OUT_TOKENS = 6_000;
-
 /**
  * Stand-in for `new OpenAI()` — the real `chat.completions.create` shape, no network.
  * `seen` records what the provider was actually HANDED, which is how step 3 proves the gate ran
  * before the request rather than after it.
  */
+
 function fakeOpenAI(seen) {
   return {
     chat: {
@@ -125,6 +125,7 @@ async function offlineDemo() {
       } catch (err) {
         if (!(err instanceof GuardrailTripped)) throw err;
         const trip = err.decisions.at(-1);
+        assert.ok(trip, 'GuardrailTripped carried no decisions');
         console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
         console.log(`            provider saw ${seen.length} call(s) => $0 spent on it`);
       }
@@ -151,7 +152,9 @@ async function offlineDemo() {
     const r = report(['feature', 'user_id']);
     console.log('spend     : by feature/user');
     for (const row of r.rows) {
-      console.log(`            ${JSON.stringify(row.tags)} ${row.calls} calls  $${row.usd.amount.toString()}`);
+      console.log(
+        `            ${JSON.stringify(row.tags)} ${row.calls} calls  $${row.usd.amount.toString()}`,
+      );
     }
     totalCalls = r.rows.reduce((n, row) => n + row.calls, 0);
     console.log(`            TOTAL ${totalCalls} calls  $${r.total().amount.toString()}`);
@@ -186,7 +189,11 @@ async function offlineDemo() {
   const priced = calls.filter((c) => c.cost && c.cost.amount.gt(0));
   console.log(`verify()  : ${ok} - ${detail}`);
 
-  assert.equal(totalCalls, 5, `the $0.50 cap should stop the loop after 5 calls, got ${totalCalls}`);
+  assert.equal(
+    totalCalls,
+    5,
+    `the $0.50 cap should stop the loop after 5 calls, got ${totalCalls}`,
+  );
   assert.equal(extra, 0, 'a replayed call must not reach the provider');
   assert.ok(replayed.at(-1)?.metadata.replayed, 'the replay was not marked replayed');
   assert.ok(priced.length > 0, 'no call was priced — `prices` produced nothing for gpt-4o');

@@ -20,11 +20,12 @@ import { join } from 'node:path';
 import { AuditLog, Policy, redact, scan, verify } from '@cendor/acttrace';
 import { instrument } from '@cendor/core';
 import { Verdict, install, rules, uninstall } from '@cendor/guardrails';
-
 /**
  * A guardrail that scans a payload with acttrace's catalogue and redacts/blocks/flags PII.
  * Three lines of real logic wrapped as a deterministic guardrail.
  */
+/** guardrails narrows `action` to a literal union on purpose, so the option is typed, not `string`. */
+
 function piiGuardrail({ policy = null, stage = 'input', action = 'redact' } = {}) {
   const active = policy ?? Policy.default(); // redacts secrets + emails, flags the rest
   const check = (payload) => {
@@ -69,7 +70,9 @@ try {
       model: 'gpt-4o',
       messages: [{ role: 'user', content: 'email alice@example.com the invoice' }],
     });
-    sent = calls.at(-1).messages[0].content;
+    const delivered = calls.at(-1);
+    assert.ok(delivered, 'the redacted request never reached the fake provider');
+    sent = delivered.messages[0].content;
     console.log(`REDACTED before send: provider received ${JSON.stringify(sent)}`);
   } finally {
     uninstall();
@@ -79,9 +82,13 @@ try {
 }
 
 console.log('\nguardrail_decision entries in the audit chain:');
+// A chain entry's `payload` is `PyValue`; naming the four fields a guardrail_decision carries is
+// both the narrowing and the documentation of what lands on disk.
+
 const decisions = audit.entries.filter((e) => e.type === 'guardrail_decision');
 for (const e of decisions) {
-  console.log(`  ${String(e.payload.action).padEnd(6)} ${String(e.payload.stage).padEnd(6)} ${e.payload.guardrail}  ${e.payload.reason}`);
+  const p = e.payload;
+  console.log(`  ${p.action.padEnd(6)} ${p.stage.padEnd(6)} ${p.guardrail}  ${p.reason}`);
 }
 const [ok] = verify(path);
 console.log(`\nchain verifies: ${ok}  (the email never left the process in the clear)`);
@@ -95,7 +102,10 @@ assert.ok(sent.includes('<redacted>'), `nothing was redacted in ${JSON.stringify
 assert.equal(decisions.length, 1, 'the redaction was not recorded in the audit chain');
 // The reason must name the CATEGORY and never the value — that is the difference between an audit
 // trail and a second copy of the leak.
-assert.ok(decisions[0].payload.reason.startsWith('pii: '), 'the decision did not name the category');
+assert.ok(
+  decisions[0].payload.reason.startsWith('pii: '),
+  'the decision did not name the category',
+);
 assert.equal(ok, true, 'the audit chain failed verify()');
 
 // ── Defence in depth, DEMONSTRATED rather than asserted ──────────────────────────────────────────
@@ -122,8 +132,11 @@ console.log('\nA guardrail that pastes the raw address into its own reason:');
 console.log(`  reason as written : ${JSON.stringify(leaky.reason)}`);
 // The LAST entry is the llm_call, not the decision — pick the decision explicitly.
 const leakDecision = leakAudit.entries.filter((e) => e.type === 'guardrail_decision').at(-1);
+assert.ok(leakDecision, 'the deliberately-leaky verdict was never chained');
 console.log(`  reason on disk    : ${JSON.stringify(leakDecision.payload.reason)}`);
-console.log(`  address on disk   : ${onDisk.includes('alice@example.com')}  <- AuditLog redacts on write`);
+console.log(
+  `  address on disk   : ${onDisk.includes('alice@example.com')}  <- AuditLog redacts on write`,
+);
 assert.ok(onDisk.includes('<redacted>'), "acttrace's own redactor did not scrub the chain");
 assert.equal(
   onDisk.includes('alice@example.com'),

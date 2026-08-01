@@ -41,8 +41,8 @@ const FRESH_IN = 2_000; // uncached input, the standard rate
 const CACHE_READ = 18_000; // served from the prompt cache — the cheap rate
 const CACHE_WRITE = 4_000; // written INTO the cache — costs MORE than uncached input
 const OUT = 900;
-
 /** Stand-in for `new Anthropic()` — the real `messages.create` shape, no network. */
+
 function fakeAnthropic(seen) {
   return {
     messages: {
@@ -103,7 +103,11 @@ async function offlineDemo() {
   const chain = join(tmp, 'audit.jsonl');
   const tape = join(tmp, 'anthropic.cassette.json');
 
-  const audit = new AuditLog('claude-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
+  const audit = new AuditLog('claude-bot', {
+    riskTier: 'limited',
+    path: chain,
+    signingKey: SIGNING_KEY,
+  });
   try {
     install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
     try {
@@ -116,6 +120,7 @@ async function offlineDemo() {
       } catch (err) {
         if (!(err instanceof GuardrailTripped)) throw err;
         const trip = err.decisions.at(-1);
+        assert.ok(trip, 'GuardrailTripped carried no decisions');
         console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
         console.log(`            provider saw ${seen.length} call(s) => $0 spent on it`);
       }
@@ -139,12 +144,22 @@ async function offlineDemo() {
     audit.detach();
   }
 
-  const one = calls.find((c) => c.usage.inputTokens > 0);
+  // `usage` is nullable on LLMCall, so the predicate has to say so — and `find` returns
+  // `T | undefined`, which the assert turns into a named failure instead of a TypeError.
+  const one = calls.find((c) => (c.usage?.inputTokens ?? 0) > 0);
+  assert.ok(one?.usage, 'no call on the bus carried normalized usage');
+  assert.ok(one.cost, 'the call reached the bus unpriced');
   console.log('usage     : three input rates on ONE call');
-  console.log(`            input        ${one.usage.inputTokens} total (${one.usage.cachedTokens} of it cache READ, the cheap rate)`);
-  console.log(`            cache write  ${CACHE_WRITE} — its own category, and it costs MORE than uncached input`);
+  console.log(
+    `            input        ${one.usage.inputTokens} total (${one.usage.cachedTokens} of it cache READ, the cheap rate)`,
+  );
+  console.log(
+    `            cache write  ${CACHE_WRITE} — its own category, and it costs MORE than uncached input`,
+  );
   console.log(`            output       ${one.usage.outputTokens}`);
-  console.log(`            cost         $${one.cost.amount.toString()}  <- Anthropic's formula, not a two-rate approximation`);
+  console.log(
+    `            cost         $${one.cost.amount.toString()}  <- Anthropic's formula, not a two-rate approximation`,
+  );
 
   const before = seen.length;
   await cassette.using(tape, { mode: 'record' }, () =>
@@ -176,7 +191,10 @@ async function offlineDemo() {
   // that is deliberate — in the JS SDK they are HELPERS built on `create`, so a target would
   // double-count one request. Python is the opposite: there each POSTs its own request and needs its
   // own target (added in `cendor-core` 1.17.0, zero events before it). Same shape as openai's `parse`.
-  assert.ok(one.usage.cachedTokens > 0, 'cache_read_input_tokens was not normalized into cachedTokens');
+  assert.ok(
+    one.usage.cachedTokens > 0,
+    'cache_read_input_tokens was not normalized into cachedTokens',
+  );
   assert.equal(
     one.usage.inputTokens,
     FRESH_IN + CACHE_READ,

@@ -11,7 +11,9 @@ reports trip rate, false-positive rate, and a per-category breakdown.
 ```bash
 cd recipes/governance/guardrails-redteam
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

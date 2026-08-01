@@ -1,5 +1,5 @@
 /**
- * @cendor/core quickstart (JS) — one wrap, and every LLM call lands on a normalized event bus.
+ * @cendor/core quickstart (TypeScript) — one wrap, and every LLM call lands on a normalized event bus.
  *
  * Every cost/audit/testing tool wants to patch your client. @cendor/core patches it *once*:
  * instrument() wraps the client in place and emits a normalized LLMCall on a shared bus — provider,
@@ -18,7 +18,9 @@ function fakeOpenAI() {
   return {
     chat: {
       completions: {
-        create: async () => ({ usage: { prompt_tokens: 1200, completion_tokens: 350 } }),
+        create: async (_req) => ({
+          usage: { prompt_tokens: 1200, completion_tokens: 350 },
+        }),
       },
     },
   };
@@ -34,20 +36,33 @@ bus.subscribe((call) => {
   console.log('LLMCall on the bus:');
   console.log(`  provider : ${call.provider}`);
   console.log(`  model    : ${call.model}`);
-  console.log(`  usage    : ${call.usage.inputTokens} in + ${call.usage.outputTokens} out = ${call.usage.totalTokens} tokens`);
-  console.log(`  cost     : $${call.cost.amount} (${label})`);
+  // `usage` and `cost` are nullable on LLMCall, and the types say so: a call that reached the bus
+  // before the provider reported usage has neither, and an *unpriced* model has usage but no cost
+  // (that is the whole premise of the azure-foundry recipe). Narrow, never assume.
+  if (call.usage) {
+    console.log(
+      `  usage    : ${call.usage.inputTokens} in + ${call.usage.outputTokens} out = ${call.usage.totalTokens} tokens`,
+    );
+  }
+  console.log(`  cost     : ${call.cost ? `$${call.cost.amount}` : 'unpriced'} (${label})`);
   console.log(`  tokens   : counted via '${tokens.method(call.model)}' for ${call.model}`);
 });
 
-await client.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hello' }] });
+await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'hello' }],
+});
 
 // The recipe IS the test — so it has to fail when the thing it claims stops being true. Printing
 // alone would exit 0 just as happily if `instrument()` emitted nothing at all: the console would be
 // empty, node would be pleased, and CI would be green.
 const call = seen.at(-1);
 assert.ok(seen.length === 1, `expected exactly one LLMCall on the bus, got ${seen.length}`);
+assert.ok(call, 'no LLMCall reached the bus');
 assert.equal(call.provider, 'openai', 'the provider was not inferred from the client shape');
+assert.ok(call.usage, 'usage was not normalized');
 assert.ok(call.usage.inputTokens > 0 && call.usage.outputTokens > 0, 'usage was not normalized');
+assert.ok(call.cost, 'the call reached the bus unpriced');
 assert.ok(call.cost.amount.gt(0), 'the call reached the bus unpriced');
 // Money is decimal.js, never a float — `.toString()`, not `Number(...)`.
 assert.equal(typeof call.cost.amount.toString(), 'string');

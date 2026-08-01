@@ -20,6 +20,7 @@ import { BudgetExceeded, clamps, reset, withBudget } from '@cendor/tokenguard';
 
 const MODEL = 'gpt-4o';
 const PROMPT = [{ role: 'user', content: 'explain the refund policy' }];
+/** What reaches the provider. `max_completion_tokens` is the ceiling a `clamp` injects. */
 
 /** A normal (non-streaming) fake provider that records the kwargs it was handed. */
 function blockingClient(seen) {
@@ -58,7 +59,8 @@ function streamingClient(chunks = 80) {
       };
     },
   };
-  return { client: instrument({ chat: { completions: { create: async () => stream } } }), closed };
+  const create = async (_req) => stream;
+  return { client: instrument({ chat: { completions: { create } } }), closed };
 }
 
 // ---- clamp: the provider is told the ceiling, so the answer cannot be long ----------------------
@@ -68,7 +70,9 @@ await withBudget({ tokens: 200, onExceed: 'clamp' }, () =>
   blockingClient(seen).chat.completions.create({ model: MODEL, messages: PROMPT }),
 );
 const ceiling = seen.max_completion_tokens;
-console.log(`clamp  (non-stream) : injected max_completion_tokens=${ceiling} -> ${clamps().length} clamp, no exception, the call ran`);
+console.log(
+  `clamp  (non-stream) : injected max_completion_tokens=${ceiling} -> ${clamps().length} clamp, no exception, the call ran`,
+);
 
 // ---- break: the stream is cut mid-flight, and the socket is closed ------------------------------
 reset();
@@ -76,7 +80,11 @@ const { client, closed } = streamingClient();
 let got = 0;
 let cut = null;
 await withBudget({ tokens: 25, onExceed: 'break' }, async () => {
-  const stream = await client.chat.completions.create({ model: MODEL, messages: PROMPT, stream: true });
+  const stream = await client.chat.completions.create({
+    model: MODEL,
+    messages: PROMPT,
+    stream: true,
+  });
   try {
     for await (const _ of stream) got++;
   } catch (err) {
@@ -97,11 +105,16 @@ try {
   if (!(err instanceof BudgetExceeded)) throw err;
   after = String(err.message);
 }
-console.log(`break  (non-stream) : ${after ? 'threw POST-flight' : 'no effect'} - the money is already spent`);
+console.log(
+  `break  (non-stream) : ${after ? 'threw POST-flight' : 'no effect'} - the money is already spent`,
+);
 console.log(`                      ${after ? after.split('\n')[0].slice(0, 96) : ''}`);
-console.log('choose              : clamp when the answer should be short (provider enforces it); break when length is unknown and you want a stop button');
+console.log(
+  'choose              : clamp when the answer should be short (provider enforces it); break when length is unknown and you want a stop button',
+);
 
 assert.notEqual(ceiling, undefined, 'clamp did not inject a server-side ceiling');
-if (cut === null || got === 0 || got >= 80) throw new Error('break did not cut the stream mid-flight');
+if (cut === null || got === 0 || got >= 80)
+  throw new Error('break did not cut the stream mid-flight');
 assert.equal(closed.v, true, 'break left the provider stream open');
 assert.notEqual(after, null, 'break on a non-streamed call should still surface a breach');

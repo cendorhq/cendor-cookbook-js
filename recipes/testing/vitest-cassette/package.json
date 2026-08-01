@@ -8,11 +8,11 @@
   },
   "scripts": {
     "start": "node index.mjs",
-    "test": "vitest run"
+    "test": "vitest run agent.test.mjs"
   },
   "dependencies": {
     "@cendor/cassette": "^3.0.0",
-    "@cendor/core": "^3.4.0",
+    "@cendor/core": "^3.5.0",
     "vitest": "^4.1.10"
   }
 }

@@ -27,9 +27,8 @@ const PROMPT = [{ role: 'user', content: 'summarize the release notes' }];
 /** A fake OpenAI-shaped client. `boom` makes any real call an immediate failure — which is how the
  * $0 claim is PROVEN rather than asserted. */
 function provider({ boom = false } = {}) {
-  const state = { calls: 0 };
-  state.completions = {
-    create: async () => {
+  const completions = {
+    create: async (_req) => {
       state.calls++;
       if (boom) throw new Error('a replayed run must never reach the provider');
       return {
@@ -39,7 +38,14 @@ function provider({ boom = false } = {}) {
       };
     },
   };
-  state.client = instrument({ chat: { completions: state.completions } });
+  // `state` is referenced above before this line, which is fine: `create` only runs later, and
+  // declaring the object in one expression is what lets TypeScript infer it (a `{calls: 0}` that
+  // grows properties afterwards has already been inferred as having none).
+  const state = {
+    calls: 0,
+    completions,
+    client: instrument({ chat: { completions } }),
+  };
   return state;
 }
 
@@ -85,12 +91,14 @@ const line = (label, calls, row) =>
 console.log(line('record  ', live.calls, recordedRow));
 console.log(line('replay  ', boom.calls, replayRow));
 console.log('          ^ the same tokens are accounted, with $0 of REAL spend');
+assert.ok(replayed, 'the replay produced no response');
 console.log(`answer  : ${JSON.stringify(replayed.choices[0].message.content)}`);
 console.log(`audited : ${audited.length} llm_call entry chained on the replay`);
 console.log(`verify(): ${ok} — ${detail}`);
 console.log(`cassette: ${statSync(tape).size} bytes on disk — commit it and CI runs free`);
 
-if (live.calls !== 1 || boom.calls !== 0) throw new Error('the replay must short-circuit the provider');
+if (live.calls !== 1 || boom.calls !== 0)
+  throw new Error('the replay must short-circuit the provider');
 assert.equal(replayRow.tokens, recordedRow.tokens, 'the replay did not accrue the recorded usage');
 assert.notEqual(audited.length, 0, 'the replayed call was not chained by the attached audit log');
 assert.equal(ok, true, 'the replay audit chain failed verify()');

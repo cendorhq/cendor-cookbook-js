@@ -13,7 +13,9 @@ number** where it breaks. This recipe flips a single byte inside a hashed payloa
 ```bash
 cd recipes/quickstarts/acttrace
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

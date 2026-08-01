@@ -10,6 +10,11 @@ Copy-paste **TypeScript** recipes proving [**Cendor**](https://github.com/cendor
 production plumbing for LLM apps (cost, context, testing, governance) — works with the frameworks and
 providers you already use. **Every recipe runs offline, with no API key.**
 
+**Written in TypeScript, runnable as plain JavaScript.** Each recipe ships twice: `index.mts` is the
+typed source, and the `index.mjs` beside it is generated from it and committed. So
+`npx tsx index.mts` gives you the TypeScript, `node index.mjs` runs on Node 20+ with **no build step,
+no loader and no toolchain** — and CI proves the two can never drift apart.
+
 Each recipe installs the published `@cendor/*` npm packages and drives them against a fake
 provider-shaped client, exactly the way Cendor's own test suite does — so there's nothing to sign up
 for and nothing to spend.
@@ -25,7 +30,9 @@ for and nothing to spend.
 ```bash
 git clone https://github.com/cendorhq/cendor-cookbook-js
 cd cendor-cookbook-js/recipes/quickstarts/core-js
-npm install && node index.mjs
+npm install && node index.mjs      # plain JS — no build step
+# ...or read/run the TypeScript source it was generated from:
+npx tsx index.mts
 ```
 
 There is **no workspace and no root install**. Every recipe is a self-contained folder with its own
@@ -114,12 +121,38 @@ That is the complete list. Everything else in the Python cookbook is here.
 ```bash
 cd recipes/<category>/<name>
 npm install
-node index.mjs
+node index.mjs        # or: npx tsx index.mts
 ```
 
 Every category above has a matching shard in [`.github/workflows/ci.yml`](.github/workflows/ci.yml),
 and `scripts/check-recipe-coverage.mjs` fails the build if a category ever escapes it — that is what
 backs the "every recipe runs offline" claim.
+
+## TypeScript source, JavaScript product
+
+`index.mts` is what you edit; `index.mjs` is **generated from it and committed**. Two reasons it
+works this way rather than shipping only one of them:
+
+- **A plain-JS reader owes nothing to a toolchain.** `node index.mjs` runs as-is on Node 20 — the
+  oldest version in the CI matrix, which cannot execute TypeScript at all. No `tsx`, no `tsc`, no
+  loader flag, nothing added to the recipe's `package.json`.
+- **A TypeScript reader gets types that are actually checked.** Every `.mts` is typechecked under
+  `strict` against the **real published `@cendor/*` types** in CI, on both Node versions. The same
+  property `pnpm check:docs` gives the docs, the cookbook now has too.
+
+**Never hand-edit an `index.mjs`.** `scripts/check-ts-js-sync.mjs` regenerates every file and fails
+on one differing byte, so an edit there is reverted by the next build and rejected by CI in between.
+
+```bash
+npm install --prefix scripts     # tsc + ts-blank-space + biome, pinned exactly
+node scripts/build-recipes.mjs   # typecheck every .mts, rewrite every .mjs
+node scripts/check-ts-js-sync.mjs --self-test   # the gate's own negative control
+```
+
+The generator erases types with [ts-blank-space](https://github.com/bloomberg/ts-blank-space) and
+formats the result with biome, rather than emitting through `tsc` — `tsc` re-prints from the AST and
+drops every blank line, which is fine for build output and wrong for a file people are meant to
+read. `tsc` still does the typechecking; only the emitter is replaced.
 
 ## How offline works
 

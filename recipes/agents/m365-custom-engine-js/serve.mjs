@@ -42,7 +42,9 @@ if (!free) {
 
 console.log(`audit chain : ${AUDIT}`);
 console.log(`endpoint    : http://localhost:${PORT}/api/messages   (anonymous — LOCAL ONLY)`);
-console.log(`drive it    : agentsplayground -e "http://localhost:${PORT}/api/messages" -c emulator`);
+console.log(
+  `drive it    : agentsplayground -e "http://localhost:${PORT}/api/messages" -c emulator`,
+);
 console.log('(verified against @microsoft/m365agentsplayground 0.2.28)\n');
 
 await serve(new GovernedAgent({ auditPath: AUDIT }), PORT);

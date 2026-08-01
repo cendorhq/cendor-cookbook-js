@@ -35,7 +35,7 @@ function fakeOpenAI() {
   return {
     chat: {
       completions: {
-        create: async () => ({
+        create: async (_req) => ({
           choices: [{ message: { content: 'Approved: within policy.' } }],
           usage: { prompt_tokens: 60, completion_tokens: 8 },
         }),
@@ -73,7 +73,8 @@ let blocked = false;
 // model provably never saw the SSN. A check inside the handler would be too late twice over: the
 // data has already been sent, and the log would say "we sent it, then complained".
 const guard = (call) => {
-  const content = (call?.messages ?? []).map((m) => String(m.content ?? '')).join(' ');
+  const messages = call instanceof LLMCall ? call.messages : [];
+  const content = messages.map((m) => String(m.content ?? '')).join(' ');
   if (call instanceof LLMCall && SSN.test(content)) {
     audit.flag('SSN in prompt', { action: 'blocked', severity: 'critical', data: 'us_ssn' });
     throw new PolicyViolation('blocked: SSN in prompt');
@@ -130,15 +131,26 @@ console.log(`  exit ${exitOk}`);
 const data = readFileSync(evidence);
 const i = data.indexOf(Buffer.from('approved'));
 assert.notEqual(i, -1, 'the phrase to tamper with is not in the exported pack');
-writeFileSync(evidence, Buffer.concat([data.subarray(0, i), Buffer.from('A'), data.subarray(i + 1)]));
+writeFileSync(
+  evidence,
+  Buffer.concat([data.subarray(0, i), Buffer.from('A'), data.subarray(i + 1)]),
+);
 const exitTampered = acttraceCli(['verify', evidence, '--key', SIGNING_KEY]);
 console.log(`$ acttrace verify evidence.jsonl --key ***   (1 byte flipped)`);
 console.log(`  exit ${exitTampered}`);
 
 assert.equal(blocked, true, 'the SSN-bearing prompt was NOT blocked pre-flight');
-assert.equal(refusal, true, 'the refusal is missing from the evidence pack — a blocked request now looks like no request');
+assert.equal(
+  refusal,
+  true,
+  'the refusal is missing from the evidence pack — a blocked request now looks like no request',
+);
 assert.equal(exitOk, 0, 'the clean evidence pack failed acttrace verify');
-assert.notEqual(exitTampered, 0, 'a tampered evidence pack still verified — the chain proves nothing');
+assert.notEqual(
+  exitTampered,
+  0,
+  'a tampered evidence pack still verified — the chain proves nothing',
+);
 
 console.log(
   '\n⚠️ acttrace produces EVIDENCE TO SUPPORT a compliance case — it is not a compliance ' +

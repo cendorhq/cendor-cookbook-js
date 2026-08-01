@@ -49,7 +49,8 @@ function runawayClient() {
       };
     },
   };
-  const client = instrument({ chat: { completions: { create: async () => stream } } });
+  const create = async (_req) => stream;
+  const client = instrument({ chat: { completions: { create } } });
   return { client, closed };
 }
 
@@ -64,7 +65,11 @@ let raised = 0;
 let reason = '';
 try {
   await withBudget({ tokens: 20, onExceed: 'break' }, async () => {
-    const stream = await client.chat.completions.create({ model: MODEL, messages: [], stream: true });
+    const stream = await client.chat.completions.create({
+      model: MODEL,
+      messages: [],
+      stream: true,
+    });
     try {
       for await (const chunk of stream) received.push(chunk);
     } catch (err) {
@@ -76,10 +81,16 @@ try {
 } finally {
   audit.detach();
 }
+// An entry's `payload` is typed `PyValue` (the JSON union a chain can hold), so naming the two
+// fields a budget_event carries is both the narrowing and the documentation.
 
-const broken = audit.entries.filter((e) => e.type === 'budget_event' && e.payload.action === 'broken');
+const broken = audit.entries.filter(
+  (e) => e.type === 'budget_event' && e.payload.action === 'broken',
+);
 const [ok, detail] = verify(chain);
-const cap = broken.at(-1).payload.cap_tokens;
+const lastBreak = broken.at(-1);
+assert.ok(lastBreak, "the break was never chained as a budget_event(action='broken')");
+const cap = lastBreak.payload.cap_tokens;
 
 console.log(`stream       : cut after ${received.length} of ${CHUNKS} chunks (partial text kept)`);
 console.log(`provider     : underlying stream closed = ${closed.v}`);
@@ -88,7 +99,8 @@ console.log(`chained      : budget_event(action='broken'), cap ${cap} tokens`);
 console.log(`verify()     : ${ok} - ${detail}`);
 
 assert.equal(raised, 1, 'exactly one BudgetExceeded should surface on the cut');
-if (!(received.length > 0 && received.length < CHUNKS)) throw new Error('the runaway stream was not cut mid-flight');
+if (!(received.length > 0 && received.length < CHUNKS))
+  throw new Error('the runaway stream was not cut mid-flight');
 assert.equal(closed.v, true, 'the provider stream was left open after the cut');
 assert.notEqual(broken.length, 0, "the cut was not chained as a budget_event(action='broken')");
 assert.equal(ok, true, 'the break audit chain failed verify()');

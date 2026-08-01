@@ -33,7 +33,12 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as cassette from '@cendor/cassette';
-import { embeddingScorer, lexicalScore, localEmbeddingScorer, semanticMatch } from '@cendor/cassette';
+import {
+  embeddingScorer,
+  lexicalScore,
+  localEmbeddingScorer,
+  semanticMatch,
+} from '@cendor/cassette';
 import { instrument } from '@cendor/core';
 
 const MODEL = 'gpt-4o';
@@ -47,7 +52,7 @@ function provider(answer) {
   return instrument({
     chat: {
       completions: {
-        create: async () => ({
+        create: async (_req) => ({
           choices: [{ message: { content: answer } }],
           usage: { prompt_tokens: 24, completion_tokens: 12 },
           model: MODEL,
@@ -101,13 +106,21 @@ for (const [label, live] of [
 
 const pad = (s, n) => String(s).padEnd(n);
 console.log(`recorded    : ${JSON.stringify(RECORDED)}\n`);
-console.log(`${pad('live answer', 12)} ${pad('drift()', 8)} ${pad('lexical', 8)} ${pad('kept', 5)} ${pad('toy-embed', 10)} kept`);
+console.log(
+  `${pad('live answer', 12)} ${pad('drift()', 8)} ${pad('lexical', 8)} ${pad('kept', 5)} ${pad('toy-embed', 10)} kept`,
+);
 for (const r of rows) {
-  console.log(`${pad(r.label, 12)} ${pad(r.byteLevel, 8)} ${pad(r.lex.toFixed(2), 8)} ${pad(r.lexKept, 5)} ${pad(r.emb.toFixed(2), 10)} ${r.embKept}`);
+  console.log(
+    `${pad(r.label, 12)} ${pad(r.byteLevel, 8)} ${pad(r.lex.toFixed(2), 8)} ${pad(r.lexKept, 5)} ${pad(r.emb.toFixed(2), 10)} ${r.embKept}`,
+  );
 }
 
-console.log("\nread the two 'kept' columns: the PARAPHRASE survives the filter and the REAL CHANGE is");
-console.log('dropped, under both scorers. A surface scorer measures shared words, so a rewrite looks');
+console.log(
+  "\nread the two 'kept' columns: the PARAPHRASE survives the filter and the REAL CHANGE is",
+);
+console.log(
+  'dropped, under both scorers. A surface scorer measures shared words, so a rewrite looks',
+);
 console.log('like a big change and one edited number looks like none. That is the whole reason');
 console.log('semanticDrift() takes scorer=.');
 
@@ -116,25 +129,37 @@ try {
   localEmbeddingScorer();
   console.log('  localEmbeddingScorer() returned a scorer (unexpected in JS)');
 } catch (err) {
-  console.log(`  localEmbeddingScorer() -> throws: ${err.message.slice(0, 88)}`);
+  const msg = err instanceof Error ? err.message : String(err);
+  console.log(`  localEmbeddingScorer() -> throws: ${msg.slice(0, 88)}`);
 }
-console.log('  In Python that call IS the recommended offline semantic backend (model2vec, via the');
-console.log('  cendor-cassette[embeddings] extra). In JS, wrap your own model with embeddingScorer().');
+console.log(
+  '  In Python that call IS the recommended offline semantic backend (model2vec, via the',
+);
+console.log(
+  '  cendor-cassette[embeddings] extra). In JS, wrap your own model with embeddingScorer().',
+);
 
 console.log('\nwhere the lexical default IS the right tool - asserting an answer means roughly X:');
 for (const expected of ['refund within 30 days', 'delivery']) {
-  console.log(`  semanticMatch(recorded, ${JSON.stringify(expected)}) = ${semanticMatch(RECORDED, expected)}`);
+  console.log(
+    `  semanticMatch(recorded, ${JSON.stringify(expected)}) = ${semanticMatch(RECORDED, expected)}`,
+  );
 }
 
 const negation = 'We will not offer a refund.';
 console.log('\nhonest limit, measured rather than hidden:');
-console.log(`  lexicalScore(${JSON.stringify(negation)}, 'offer a refund') = ${lexicalScore(negation, 'offer a refund').toFixed(2)} -> match ${semanticMatch(negation, 'offer a refund')}`);
+console.log(
+  `  lexicalScore(${JSON.stringify(negation)}, 'offer a refund') = ${lexicalScore(negation, 'offer a refund').toFixed(2)} -> match ${semanticMatch(negation, 'offer a refund')}`,
+);
 console.log('  keyword containment cannot see a negation. Do not use it as a safety check.');
 
 assert.ok(
   rows.every((r) => r.byteLevel === 1),
   'rerecord should report one byte-level divergence each time',
 );
-if (!(rows[0].lex < rows[1].lex)) throw new Error('the measured inversion this recipe teaches has changed');
-if (!semanticMatch(RECORDED, 'refund within 30 days')) throw new Error('the lexical default missed a match');
-if (!semanticMatch(negation, 'offer a refund')) throw new Error('the documented negation limit changed');
+if (!(rows[0].lex < rows[1].lex))
+  throw new Error('the measured inversion this recipe teaches has changed');
+if (!semanticMatch(RECORDED, 'refund within 30 days'))
+  throw new Error('the lexical default missed a match');
+if (!semanticMatch(negation, 'offer a refund'))
+  throw new Error('the documented negation limit changed');

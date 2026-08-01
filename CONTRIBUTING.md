@@ -32,7 +32,8 @@ cassette lands.
 | Piece | Rule |
 |---|---|
 | `README.md` | the **pain** (2–3 lines, in a developer's words) → **what the recipe shows** → the **run command** → an **expected-output** snippet that includes the money shot |
-| `index.mjs` | **~80 lines is the target, not a gate** — copy-paste runnable as `npm install && node index.mjs` from the recipe directory. Some recipes are legitimately longer (the agent-host recipe is hundreds of lines, because the *host* is the point); the real rule is that a reader can follow it top to bottom in one sitting |
+| `index.mts` | The **TypeScript source — the only file you edit.** **~80 lines is the target, not a gate**; some recipes are legitimately longer (the agent-host recipe is hundreds of lines, because the *host* is the point). The real rule is that a reader can follow it top to bottom in one sitting. Must typecheck under `strict` |
+| `index.mjs` | **GENERATED from the `.mts` and committed — never hand-edited.** It is what `node index.mjs` runs, with no build step, on Node 20+. `node scripts/build-recipes.mjs` writes it; `scripts/check-ts-js-sync.mjs` fails CI on one differing byte |
 | `package.json` | the recipe's **own** pins — `"type": "module"`, `"private": true`, a `start` script, and caret ranges on the `@cendor/*` packages it actually imports. No workspace, no hoisting |
 | Offline | green with **no key and no network** — fake provider-shaped client (default) or a committed cassette fixture |
 | Node | runs on **Node 20 and 22** (the CI matrix). If it needs a newer Node, it does not belong here yet |
@@ -47,8 +48,20 @@ cassette lands.
 recipes/<category>/<name>/
 ├── README.md      # pain → shows → run → expected output (money shot)
 ├── package.json   # own pins, "type": "module", "private": true
-└── index.mjs      # ~80 lines target (not a gate), offline, node index.mjs
+├── index.mts      # THE SOURCE — TypeScript, strict, ~80 lines target (not a gate)
+└── index.mjs      # GENERATED from index.mts and committed — never hand-edit
 ```
+
+Write the `.mts`, then generate the `.mjs`:
+
+```bash
+npm install --prefix scripts        # tsc + ts-blank-space + biome, pinned exactly (once)
+node scripts/build-recipes.mjs recipes/<category>/<name>
+```
+
+`@types/node` lives in `scripts/`, not in your recipe — it is a typecheck dependency, and the pins in
+a recipe's `package.json` are the ones a reader copies to *run* it. Add a dependency there only if
+the recipe genuinely imports it.
 
 `package.json` skeleton:
 
@@ -63,25 +76,32 @@ recipes/<category>/<name>/
 }
 ```
 
-`index.mjs` skeleton (fake-client offline pattern):
+`index.mts` skeleton (fake-client offline pattern). Note the annotated `create` parameter: the fake
+is *called* with a request object, so a bare `async () => …` is a type error, not a shortcut.
 
-```js
+```ts
 import { LLMCall, bus, instrument } from '@cendor/core';
+
+type ChatRequest = { model: string; messages: { role: string; content: string }[] };
 
 function fakeOpenAI(promptTokens = 1000, completionTokens = 500) {
   return {
     chat: {
       completions: {
-        create: async () => ({ usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens } }),
+        create: async (_req: ChatRequest) => ({
+          usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens },
+        }),
       },
     },
   };
 }
 
 const client = instrument(fakeOpenAI());
-bus.subscribe((call) => {
+bus.subscribe((call: unknown) => {
   if (!(call instanceof LLMCall)) return;
-  console.log(call.provider, call.model, call.usage.totalTokens, `$${call.cost.amount}`);
+  // `usage` and `cost` are NULLABLE on LLMCall and the types say so — an unpriced model has usage
+  // and no cost. Narrow; never assume.
+  console.log(call.provider, call.model, call.usage?.totalTokens, `$${call.cost?.amount}`);
 });
 
 await client.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] });
@@ -89,8 +109,11 @@ await client.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user
 
 ## Before you open the PR
 
+- [ ] `node scripts/build-recipes.mjs recipes/<category>/<name>` passes — the `.mts` typechecks under
+      `strict` and the committed `.mjs` is regenerated.
 - [ ] `npm install && node index.mjs` prints the money shot **with no key set**, from inside the
       recipe directory.
+- [ ] You edited the **`.mts`**, not the `.mjs`. (`node scripts/check-ts-js-sync.mjs` proves it.)
 - [ ] It runs on **Node 20 and 22**, not just your local Node.
 - [ ] `node scripts/check-one-core.mjs recipes/<category>/<name>` passes.
 - [ ] The README's expected-output snippet matches what the recipe actually prints.

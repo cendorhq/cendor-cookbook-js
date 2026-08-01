@@ -23,9 +23,18 @@ import { report, reset, track } from '@cendor/tokenguard';
 // A completed batch job's downloaded results (OpenAI Batch `output.jsonl` shape, trimmed to the
 // fields that matter for accounting). In production these are the lines of the file the job returns.
 const BATCH_OUTPUT_JSONL = [
-  { custom_id: 'req-1', response: { body: { model: 'gpt-4o', usage: { prompt_tokens: 1200, completion_tokens: 300 } } } },
-  { custom_id: 'req-2', response: { body: { model: 'gpt-4o', usage: { prompt_tokens: 800, completion_tokens: 150 } } } },
-  { custom_id: 'req-3', response: { body: { model: 'gpt-4o', usage: { prompt_tokens: 2000, completion_tokens: 640 } } } },
+  {
+    custom_id: 'req-1',
+    response: { body: { model: 'gpt-4o', usage: { prompt_tokens: 1200, completion_tokens: 300 } } },
+  },
+  {
+    custom_id: 'req-2',
+    response: { body: { model: 'gpt-4o', usage: { prompt_tokens: 800, completion_tokens: 150 } } },
+  },
+  {
+    custom_id: 'req-3',
+    response: { body: { model: 'gpt-4o', usage: { prompt_tokens: 2000, completion_tokens: 640 } } },
+  },
 ]
   .map((line) => JSON.stringify(line))
   .join('\n');
@@ -59,14 +68,21 @@ async function ingestBatch(outputJsonl, { batchId, feature }) {
 
 reset();
 const BATCH_ID = 'batch_68f2c1a9';
-const n = await ingestBatch(BATCH_OUTPUT_JSONL, { batchId: BATCH_ID, feature: 'nightly-summaries' });
+const n = await ingestBatch(BATCH_OUTPUT_JSONL, {
+  batchId: BATCH_ID,
+  feature: 'nightly-summaries',
+});
 
 const r = report(['feature', 'batch_id']);
 console.log(`ingested   : ${n} result line(s) from ${BATCH_ID}`);
 for (const row of r.rows) {
-  console.log(`spend      : ${JSON.stringify(row.tags)}  ${row.calls} calls  ${row.tokens} tok  $${row.usd.amount.toString()}`);
+  console.log(
+    `spend      : ${JSON.stringify(row.tags)}  ${row.calls} calls  ${row.tokens} tok  $${row.usd.amount.toString()}`,
+  );
 }
-console.log(`total      : $${r.total().amount.toString()}  — priced by the same table a live call uses`);
+console.log(
+  `total      : $${r.total().amount.toString()}  — priced by the same table a live call uses`,
+);
 
 const expectedTokens = 1200 + 300 + 800 + 150 + 2000 + 640;
 assert.equal(n, 3, `expected 3 result lines, ingested ${n}`);

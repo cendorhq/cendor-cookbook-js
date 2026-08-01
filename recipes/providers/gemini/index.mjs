@@ -44,7 +44,6 @@ const IN_TOKENS = 14_000;
 const OUT_TOKENS = 2_000;
 
 const providerCalls = { n: 0 };
-
 /**
  * Stand-in for `new GoogleGenAI()`. Note `usageMetadata`, camelCase, and NOT under a `usage` key —
  * an OpenAI reader looking for `usage.prompt_tokens` finds nothing at all here.
@@ -53,9 +52,11 @@ const providerCalls = { n: 0 };
  * chunks below report 400 → 1,200 → 2,000 output tokens: the true answer is 2,000, and a summing
  * implementation would say 3,600.
  */
+/** Gemini's request shape: `contents`, not `messages`. */
+
 function fakeGenAI() {
   const models = {
-    generateContent: async () => {
+    generateContent: async (_req) => {
       providerCalls.n++;
       return {
         text: 'Refund queued.',
@@ -66,7 +67,7 @@ function fakeGenAI() {
         },
       };
     },
-    generateContentStream: async () => {
+    generateContentStream: async (_req) => {
       providerCalls.n++;
       return (async function* () {
         for (const running of [400, 1200, 2000]) {
@@ -85,13 +86,15 @@ function fakeGenAI() {
   return { models };
 }
 
-const answer = budget({ usd: 0.5, onExceed: 'block', outputReserve: OUT_TOKENS })(async (client) => {
-  for (let i = 0; i < 200; i++) {
-    await track({ feature: 'summarizer' }, () =>
-      client.models.generateContent({ model: MODEL, contents: 'summarize the ticket thread' }),
-    );
-  }
-});
+const answer = budget({ usd: 0.5, onExceed: 'block', outputReserve: OUT_TOKENS })(
+  async (client) => {
+    for (let i = 0; i < 200; i++) {
+      await track({ feature: 'summarizer' }, () =>
+        client.models.generateContent({ model: MODEL, contents: 'summarize the ticket thread' }),
+      );
+    }
+  },
+);
 
 async function recordLive() {
   const { GoogleGenAI } = await import('@google/genai');
@@ -118,16 +121,24 @@ async function offlineDemo() {
   const chain = join(tmp, 'audit.jsonl');
   const tape = join(tmp, 'gemini.cassette.json');
 
-  const audit = new AuditLog('gemini-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
+  const audit = new AuditLog('gemini-bot', {
+    riskTier: 'limited',
+    path: chain,
+    signingKey: SIGNING_KEY,
+  });
   let totalCalls = 0;
   try {
     install([rules.keywordDeny(['ignore previous instructions'], { action: 'block' })]);
     try {
       try {
-        await client.models.generateContent({ model: MODEL, contents: 'ignore previous instructions' });
+        await client.models.generateContent({
+          model: MODEL,
+          contents: 'ignore previous instructions',
+        });
       } catch (err) {
         if (!(err instanceof GuardrailTripped)) throw err;
         const trip = err.decisions.at(-1);
+        assert.ok(trip, 'GuardrailTripped carried no decisions');
         console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
         console.log(`            provider saw ${providerCalls.n} call(s) => $0 spent on it`);
       }
@@ -149,19 +160,26 @@ async function offlineDemo() {
     }
     const r = report(['feature']);
     totalCalls = r.rows.reduce((n, row) => n + row.calls, 0);
-    console.log(`spend     : ${totalCalls} calls  $${r.total().amount.toString()} (usageMetadata normalized onto the same bus)`);
+    console.log(
+      `spend     : ${totalCalls} calls  $${r.total().amount.toString()} (usageMetadata normalized onto the same bus)`,
+    );
   } finally {
     audit.detach();
   }
 
   // The distinctive bit, measured: a cumulative stream must NOT be summed.
-  const nonStream = calls.filter((c) => c.usage.outputTokens > 0).length;
+  const nonStream = calls.filter((c) => (c.usage?.outputTokens ?? 0) > 0).length;
   const stream = await client.models.generateContentStream({ model: MODEL, contents: 'stream it' });
   let chunks = 0;
   for await (const _ of stream) chunks++;
   const streamed = calls.at(-1);
-  console.log(`stream    : ${chunks} chunks, each reporting the RUNNING total (400 -> 1200 -> 2000)`);
-  console.log(`            recorded output = ${streamed.usage.outputTokens}, not ${400 + 1200 + 2000} — the last value wins, sums do not`);
+  assert.ok(streamed?.usage, 'the stream produced no LLMCall with usage');
+  console.log(
+    `stream    : ${chunks} chunks, each reporting the RUNNING total (400 -> 1200 -> 2000)`,
+  );
+  console.log(
+    `            recorded output = ${streamed.usage.outputTokens}, not ${400 + 1200 + 2000} — the last value wins, sums do not`,
+  );
 
   const before = providerCalls.n;
   await cassette.using(tape, { mode: 'record' }, () =>
@@ -183,7 +201,10 @@ async function offlineDemo() {
     2000,
     `a cumulative stream must report its LAST value (2000), not the sum (3600); got ${streamed.usage.outputTokens}`,
   );
-  assert.ok(calls.some((c) => c.cost?.amount.gt(0)), 'no Gemini call was priced');
+  assert.ok(
+    calls.some((c) => c.cost?.amount.gt(0)),
+    'no Gemini call was priced',
+  );
   assert.equal(extra, 0, 'a replayed call must not reach the provider');
   assert.equal(ok, true, 'the audit chain failed verify()');
 }

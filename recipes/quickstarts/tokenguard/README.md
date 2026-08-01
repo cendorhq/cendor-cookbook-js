@@ -13,7 +13,9 @@ nothing. Spend is attributed by ambient tags, so the report says *which* part of
 ```bash
 cd recipes/quickstarts/tokenguard
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

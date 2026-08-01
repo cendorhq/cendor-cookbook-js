@@ -28,7 +28,7 @@ function countingClient(calls) {
   return instrument({
     chat: {
       completions: {
-        create: async () => {
+        create: async (_req) => {
           calls.n++;
           return {
             choices: [{ message: { content: 'here is the summary' } }],
@@ -51,9 +51,12 @@ const calls = { n: 0 };
 const client = countingClient(calls);
 
 install([rules.keywordDeny(['wire transfer'], { action: 'block' })]);
-let tripped = null;
+// The trip is RETURNED from the recorded scope rather than assigned into an outer `let`. Both work
+// at runtime, but only this shape survives strict TypeScript: a `let` written exclusively inside a
+// callback still reads as its initial `null` afterwards, so narrowing it collapses to `never`.
+let tripped;
 try {
-  await cassette.using(tape, { mode: 'record' }, async () => {
+  tripped = await cassette.using(tape, { mode: 'record' }, async () => {
     // 1 — the clean request: allowed, sent, recorded.
     await client.chat.completions.create({
       model: MODEL,
@@ -68,14 +71,16 @@ try {
       });
     } catch (err) {
       if (!(err instanceof GuardrailTripped)) throw err;
-      tripped = err;
+      return err;
     }
+    return null;
   });
 } finally {
   uninstall();
 }
 
 const recorded = entriesIn(tape);
+assert.ok(tripped, 'the guardrail did not block the forbidden request');
 
 console.log('clean request    : reached the provider, recorded');
 console.log(`blocked request  : GuardrailTripped - ${tripped.message}`);
@@ -83,6 +88,5 @@ console.log(`provider calls   : ${calls.n} (the blocked one never left the proce
 console.log(`cassette entries : ${recorded} - one per call that actually happened`);
 console.log('nothing to replay: a request that was refused has no recorded response to hand back');
 
-assert.notEqual(tripped, null, 'the guardrail did not block the forbidden request');
 assert.equal(calls.n, 1, 'the blocked request reached the provider');
 assert.equal(recorded, 1, 'a blocked call was written to the cassette');

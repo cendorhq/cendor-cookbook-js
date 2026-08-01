@@ -22,7 +22,11 @@ const dir = mkdtempSync(join(tmpdir(), 'cendor-recipe-'));
 const raw = join(dir, 'audit.jsonl');
 const evidence = join(dir, 'evidence.jsonl');
 
-const audit = new AuditLog('support_bot', { riskTier: 'limited', path: raw, signingKey: SIGNING_KEY });
+const audit = new AuditLog('support_bot', {
+  riskTier: 'limited',
+  path: raw,
+  signingKey: SIGNING_KEY,
+});
 
 // ⚠️ The one shape that differs from Python. Python opens a decision as a context manager
 // (`with audit.decision(input=…) as d1:`); TypeScript has no `with`, so `decision` takes the
@@ -46,7 +50,10 @@ console.log(`verify: ${ok}  (${detail})`);
 const data = readFileSync(evidence);
 const i = data.indexOf(Buffer.from('quarterly'));
 assert.notEqual(i, -1, 'the phrase to tamper with is not in the exported evidence');
-writeFileSync(evidence, Buffer.concat([data.subarray(0, i), Buffer.from('Q'), data.subarray(i + 1)]));
+writeFileSync(
+  evidence,
+  Buffer.concat([data.subarray(0, i), Buffer.from('Q'), data.subarray(i + 1)]),
+);
 
 const [ok2, detail2] = verify(evidence, { key: SIGNING_KEY });
 console.log('(1 byte flipped)');

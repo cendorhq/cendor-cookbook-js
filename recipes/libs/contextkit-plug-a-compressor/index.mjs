@@ -49,13 +49,22 @@ class DecisionsOnly {
 function caseLog(entries = 90) {
   const lines = [];
   for (let i = 0; i < entries; i++) {
-    lines.push(`[${String(i).padStart(3, '0')}] agent viewed the order and read the policy aloud to the customer`);
+    lines.push(
+      `[${String(i).padStart(3, '0')}] agent viewed the order and read the policy aloud to the customer`,
+    );
     if (i % 15 === 0) {
-      lines.push(`[${String(i).padStart(3, '0')}] DECISION: refunded order-${7000 + i} under the 30-day rule`);
+      lines.push(
+        `[${String(i).padStart(3, '0')}] DECISION: refunded order-${7000 + i} under the 30-day rule`,
+      );
     }
   }
   return lines.join('\n');
 }
+/**
+ * Every backend here labels its handle with a `technique`, but core's `Compressor` protocol only
+ * promises `expand()` — the seam is deliberately the smallest thing contextkit needs. Naming the
+ * extra field the recipe reads is honest about where the protocol ends and the backend begins.
+ */
 
 async function assembleWith(compressor, text) {
   const previous = useCompressor(compressor);
@@ -74,12 +83,28 @@ const log = caseLog();
 const mine = await assembleWith(new DecisionsOnly(), log);
 const theirs = await assembleWith(new SqueezeCompressor(), log);
 
-console.log(`raw case log     : ${tokens.count(log, MODEL).toLocaleString('en-US')} tokens, ${log.split('\n').length} lines`);
-console.log(`DecisionsOnly    : ${mine.tokensBefore} -> ${mine.tokensAfter} tok  (technique ${mine.handle.technique}, expand() exact: ${mine.handle.expand() === log})`);
-console.log(`squeeze (default): ${theirs.tokensBefore} -> ${theirs.tokensAfter} tok  (technique ${theirs.handle.technique}, expand() exact: ${theirs.handle.expand() === log})`);
-console.log('both satisfy the same protocol - contextkit imported neither, and no call site changed');
-console.log('the handle is the contract: whatever you plug in must be able to give the original back');
+assert.ok(mine?.handle, "the custom compressor never produced a 'compressed' decision");
+assert.ok(theirs?.handle, "squeeze never produced a 'compressed' decision");
+const mineHandle = mine.handle;
+const theirsHandle = theirs.handle;
 
-assert.equal(mine.handle.expand(), log, "the custom compressor's handle was not reversible");
-assert.equal(theirs.handle.expand(), log, 'the squeeze handle was not reversible');
-if (!(mine.tokensAfter < mine.tokensBefore)) throw new Error('the custom compressor did not compress');
+console.log(
+  `raw case log     : ${tokens.count(log, MODEL).toLocaleString('en-US')} tokens, ${log.split('\n').length} lines`,
+);
+console.log(
+  `DecisionsOnly    : ${mine.tokensBefore} -> ${mine.tokensAfter} tok  (technique ${mineHandle.technique}, expand() exact: ${mineHandle.expand() === log})`,
+);
+console.log(
+  `squeeze (default): ${theirs.tokensBefore} -> ${theirs.tokensAfter} tok  (technique ${theirsHandle.technique}, expand() exact: ${theirsHandle.expand() === log})`,
+);
+console.log(
+  'both satisfy the same protocol - contextkit imported neither, and no call site changed',
+);
+console.log(
+  'the handle is the contract: whatever you plug in must be able to give the original back',
+);
+
+assert.equal(mineHandle.expand(), log, "the custom compressor's handle was not reversible");
+assert.equal(theirsHandle.expand(), log, 'the squeeze handle was not reversible');
+if (!(mine.tokensAfter < mine.tokensBefore))
+  throw new Error('the custom compressor did not compress');

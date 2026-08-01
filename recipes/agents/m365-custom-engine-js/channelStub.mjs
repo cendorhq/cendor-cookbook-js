@@ -6,7 +6,7 @@
  * Service plays this part; the M365 Agents Playground plays it interactively
  * (`agentsplayground -e http://localhost:3979/api/messages -c emulator`).
  */
-import express from 'express';
+import express, {} from 'express';
 import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 
@@ -15,13 +15,20 @@ export async function freePort() {
     const srv = net.createServer();
     srv.once('error', reject);
     srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
+      const addr = srv.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
       srv.close(() => resolve(port));
     });
   });
 }
+/** One recorded Activity as the stub stores it. */
 
 export class ChannelStub {
+  port;
+  replies;
+  updates;
+  server;
+
   constructor(port) {
     this.port = port;
     this.replies = new Map();
@@ -37,7 +44,7 @@ export class ChannelStub {
     const app = express();
     app.use(express.json({ limit: '5mb' }));
     const record = (bucket) => (req, res) => {
-      const cid = req.params.cid;
+      const cid = String(req.params.cid);
       const list = bucket.get(cid) ?? [];
       list.push(req.body ?? {});
       bucket.set(cid, list);
@@ -56,7 +63,8 @@ export class ChannelStub {
 
   async stop() {
     if (!this.server) return;
-    await new Promise((resolve) => this.server.close(() => resolve()));
+    const server = this.server;
+    await new Promise((resolve) => server.close(() => resolve()));
     this.server = null;
   }
 
@@ -65,7 +73,10 @@ export class ChannelStub {
   }
 
   allFor(conversationId) {
-    return [...(this.replies.get(conversationId) ?? []), ...(this.updates.get(conversationId) ?? [])];
+    return [
+      ...(this.replies.get(conversationId) ?? []),
+      ...(this.updates.get(conversationId) ?? []),
+    ];
   }
 
   /** Wait until `count` message replies have arrived; `quiet` waits for the flow to go silent. */

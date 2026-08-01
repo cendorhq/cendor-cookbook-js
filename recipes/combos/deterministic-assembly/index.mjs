@@ -40,21 +40,25 @@ const fingerprint = (messages) =>
   createHash('sha256').update(JSON.stringify(messages)).digest('hex');
 
 function provider({ boom = false } = {}) {
-  const state = { calls: 0 };
-  state.client = instrument({
-    chat: {
-      completions: {
-        create: async () => {
-          state.calls++;
-          if (boom) throw new Error('run 2 hashed differently — assembly is not deterministic');
-          return {
-            choices: [{ message: { content: 'acknowledged' } }],
-            usage: { prompt_tokens: 640, completion_tokens: 6 },
-          };
+  // Declared as ONE expression so TypeScript can infer it: an object that grows properties after
+  // `{ calls: 0 }` has already been inferred as having none of them.
+  const state = {
+    calls: 0,
+    client: instrument({
+      chat: {
+        completions: {
+          create: async (_req) => {
+            state.calls++;
+            if (boom) throw new Error('run 2 hashed differently — assembly is not deterministic');
+            return {
+              choices: [{ message: { content: 'acknowledged' } }],
+              usage: { prompt_tokens: 640, completion_tokens: 6 },
+            };
+          },
         },
       },
-    },
-  });
+    }),
+  };
   return state;
 }
 
@@ -84,11 +88,23 @@ const same = fingerprint(nudged) === fingerprint(run2);
 
 console.log(`assembled   : ${report.used} tokens of ${report.budget} - ${evicted[0].note}`);
 console.log(`run 1 hash  : ${fingerprint(run1).slice(0, 16)}…`);
-console.log(`run 2 hash  : ${fingerprint(run2).slice(0, 16)}…   identical: ${fingerprint(run1) === fingerprint(run2)}`);
+console.log(
+  `run 2 hash  : ${fingerprint(run2).slice(0, 16)}…   identical: ${fingerprint(run1) === fingerprint(run2)}`,
+);
 console.log(`one char    : ${fingerprint(nudged).slice(0, 16)}…   identical: ${same}`);
-console.log(`replay      : provider called ${boom.calls}x, answered ${JSON.stringify(out.choices[0].message.content)}`);
+console.log(
+  `replay      : provider called ${boom.calls}x, answered ${JSON.stringify(out.choices[0].message.content)}`,
+);
 
-assert.equal(fingerprint(run1), fingerprint(run2), 'assembly is not byte-deterministic across runs');
-assert.notEqual(evicted.length, 0, 'nothing was evicted - this would prove determinism on an easy case only');
+assert.equal(
+  fingerprint(run1),
+  fingerprint(run2),
+  'assembly is not byte-deterministic across runs',
+);
+assert.notEqual(
+  evicted.length,
+  0,
+  'nothing was evicted - this would prove determinism on an easy case only',
+);
 assert.equal(boom.calls, 0, 'run 2 missed the cassette — the assembled prompt hashed differently');
 if (same) throw new Error('the fingerprint ignored a real change');

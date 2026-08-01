@@ -33,7 +33,9 @@ Every recipe in `providers/` walks the same five, so you can read one and then s
 ```bash
 cd recipes/providers/gemini
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

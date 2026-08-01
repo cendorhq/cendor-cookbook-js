@@ -39,7 +39,7 @@ const PARTNER_TOKEN = /\bPAT-[A-Za-z0-9]{24}\b/g;
 const CASE_REF = /\bcase\/20\d{2}\/\d{5}\b/g;
 
 const caseRefValid = (match) => {
-  const digits = [...match.split('/').at(-1)].map(Number);
+  const digits = [...(match.split('/').at(-1) ?? '')].map(Number);
   return digits.slice(0, -1).reduce((a, b) => a + b, 0) % 10 === digits.at(-1);
 };
 
@@ -57,29 +57,48 @@ resetDetectors();
 console.log(`built-ins only    : ${JSON.stringify(categories(PAYLOAD))}`);
 console.log('                    (the token, the case ref and both gov IDs are invisible)');
 
-registerDetector({ category: 'partner_token', group: 'secret', severity: 'critical', pattern: PARTNER_TOKEN });
-registerDetector({ category: 'case_ref', group: 'pii', severity: 'warning', pattern: CASE_REF, validator: caseRefValid });
+registerDetector({
+  category: 'partner_token',
+  group: 'secret',
+  severity: 'critical',
+  pattern: PARTNER_TOKEN,
+});
+registerDetector({
+  category: 'case_ref',
+  group: 'pii',
+  severity: 'warning',
+  pattern: CASE_REF,
+  validator: caseRefValid,
+});
 const added = enableLocalePack('uk', 'in');
 
 console.log(`locale packs      : enabled ${JSON.stringify(added)}`);
 console.log(`after registering : ${JSON.stringify(categories(PAYLOAD))}`);
 
 const findings = Object.fromEntries(scan(PAYLOAD).map((f) => [f.category, f]));
-console.log(`validator working : 'case/2026/12345' has the right shape but a bad check digit -> case_ref count is ${findings.case_ref.count}, not 2`);
+console.log(
+  `validator working : 'case/2026/12345' has the right shape but a bad check digit -> case_ref count is ${findings.case_ref.count}, not 2`,
+);
 
 // Policy resolves per category, falling back to the group. A custom detector in the "secret" group
 // inherits whatever the policy says about secrets — no policy edit needed.
 const [cleaned, resolved] = redact(PAYLOAD, Policy.strict());
 console.log('redact(Policy.strict()):');
 for (const f of resolved) {
-  console.log(`  ${f.category.padEnd(14)} group=${f.group.padEnd(8)} severity=${f.severity.padEnd(8)} action=${f.action}`);
+  console.log(
+    `  ${f.category.padEnd(14)} group=${f.group.padEnd(8)} severity=${f.severity.padEnd(8)} action=${f.action}`,
+  );
 }
 console.log(`  scrubbed payload : ${cleaned.auth} / ${cleaned.nino} / ${cleaned.uid}`);
 
 resetDetectors();
-console.log(`resetDetectors()  : back to ${JSON.stringify(categories(PAYLOAD))} - use this between tests`);
+console.log(
+  `resetDetectors()  : back to ${JSON.stringify(categories(PAYLOAD))} - use this between tests`,
+);
 
-if (JSON.stringify(cleaned).includes('PAT-')) throw new Error('the custom secret survived redaction');
+if (JSON.stringify(cleaned).includes('PAT-'))
+  throw new Error('the custom secret survived redaction');
 assert.equal(findings.case_ref.count, 1, 'the validator did not reject the bad check digit');
 if (!findings.uk_nino || !findings.in_aadhaar) throw new Error('the locale packs did not register');
-if (categories(PAYLOAD).includes('partner_token')) throw new Error('resetDetectors() left the registry dirty');
+if (categories(PAYLOAD).includes('partner_token'))
+  throw new Error('resetDetectors() left the registry dirty');

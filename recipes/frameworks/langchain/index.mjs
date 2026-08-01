@@ -33,7 +33,14 @@ const MODEL = 'gpt-4o';
 async function fakeChainRun(handler, { prompt, inputTokens, outputTokens }) {
   const runId = globalThis.crypto.randomUUID();
   await handler.handleLLMStart(
-    { id: ['langchain', 'chat_models', 'openai', 'ChatOpenAI'], kwargs: { model: MODEL } },
+    // LangChain's `Serialized` is a discriminated union; a hand-built stand-in needs the two
+    // discriminant fields or it matches no member.
+    {
+      lc: 1,
+      type: 'constructor',
+      id: ['langchain', 'chat_models', 'openai', 'ChatOpenAI'],
+      kwargs: { model: MODEL },
+    },
     [prompt],
     runId,
   );
@@ -65,8 +72,16 @@ const handler = new CendorCallbackHandler();
 
 try {
   await track({ feature: 'refund-faq' }, async () => {
-    await fakeChainRun(handler, { prompt: 'How are duplicate charges refunded?', inputTokens: 1400, outputTokens: 180 });
-    await fakeChainRun(handler, { prompt: 'And for a failed payment?', inputTokens: 900, outputTokens: 120 });
+    await fakeChainRun(handler, {
+      prompt: 'How are duplicate charges refunded?',
+      inputTokens: 1400,
+      outputTokens: 180,
+    });
+    await fakeChainRun(handler, {
+      prompt: 'And for a failed payment?',
+      inputTokens: 900,
+      outputTokens: 120,
+    });
   });
 } finally {
   audit.detach();
@@ -78,13 +93,18 @@ const audited = audit.entries.filter((e) => e.type === 'llm_call');
 
 console.log(`langchain calls captured : ${calls.length} (attach one handler; change nothing else)`);
 console.log(`model / provider         : ${calls[0].model} / ${calls[0].provider}`);
-console.log(`usage                    : ${calls[0].usage.inputTokens} in + ${calls[0].usage.outputTokens} out`);
-console.log(`spend by feature         : ${r.rows[0].calls} calls  $${r.rows[0].usd.amount.toString()}`);
+assert.ok(calls[0]?.usage, 'the LangChain call reached the bus without normalized usage');
+console.log(
+  `usage                    : ${calls[0].usage.inputTokens} in + ${calls[0].usage.outputTokens} out`,
+);
+console.log(
+  `spend by feature         : ${r.rows[0].calls} calls  $${r.rows[0].usd.amount.toString()}`,
+);
 console.log(`audit entries chained    : ${audited.length} llm_call`);
 console.log(`verify()                 : ${ok} - ${detail}`);
 
 assert.equal(calls.length, 2, `both chain runs should reach the bus, got ${calls.length}`);
-assert.equal(calls[0].usage.inputTokens, 1400, "LangChain's tokenUsage was not normalized");
+assert.equal(calls[0].usage?.inputTokens, 1400, "LangChain's tokenUsage was not normalized");
 assert.ok(calls[0].cost?.amount.gt(0), 'the LangChain call reached the bus unpriced');
 assert.equal(r.rows[0].calls, 2, 'tokenguard did not attribute the LangChain calls');
 assert.equal(audited.length, 2, 'the LangChain calls were not chained into the audit trail');

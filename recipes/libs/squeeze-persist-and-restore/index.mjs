@@ -35,6 +35,9 @@ const HERE = fileURLToPath(import.meta.url);
 
 /** A durable CCR backend in nine lines — the whole `StoreBackend` contract. */
 class FileStore {
+  path;
+  data;
+
   constructor(path) {
     this.path = path;
     this.data = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
@@ -70,7 +73,9 @@ function restore(workdir) {
     decompress(handle);
     memoryResult = 'expanded (unexpected)';
   } catch (err) {
-    memoryResult = `${err.name} - the in-process store died with the first process`;
+    // A `catch` binding is `unknown` under strict TypeScript — narrow before reading `.name`.
+    const name = err instanceof Error ? err.name : String(err);
+    memoryResult = `${name} - the in-process store died with the first process`;
   }
 
   // (b) the durable store has the original on disk.
@@ -79,7 +84,9 @@ function restore(workdir) {
 
   console.log(`  process 2 pid    : ${process.pid} (a different interpreter)`);
   console.log(`  MemoryStore()    : ${memoryResult}`);
-  console.log(`  FileStore(...)   : restored ${restored.length.toLocaleString('en-US')} chars, sha256 matches: ${digest(restored) === saved.digest}`);
+  console.log(
+    `  FileStore(...)   : restored ${restored.length.toLocaleString('en-US')} chars, sha256 matches: ${digest(restored) === saved.digest}`,
+  );
   assert.equal(digest(restored), saved.digest, 'the restored content is not the original');
 }
 
@@ -93,12 +100,21 @@ if (restoreArg !== -1) {
 
   useStore(new FileStore(store)); // durable backend, BEFORE anything is compressed
   const [small, handle] = compress(content, { kind: 'logs', model: MODEL });
-  writeFileSync(join(workdir, 'handle.json'), JSON.stringify({ handle: handle.toDict(), digest: digest(content) }));
+  writeFileSync(
+    join(workdir, 'handle.json'),
+    JSON.stringify({ handle: handle.toDict(), digest: digest(content) }),
+  );
 
   console.log(`  process 1 pid    : ${process.pid}`);
-  console.log(`  compressed       : ${tokens.count(content, MODEL).toLocaleString('en-US')} -> ${tokens.count(small, MODEL)} tokens (${handle.technique})`);
-  console.log(`  store on disk    : originals.json, ${statSync(store).size.toLocaleString('en-US')} bytes`);
-  console.log(`  handle.toDict()  : ${JSON.stringify(handle.toDict()).length} bytes of JSON - this is what you persist, not the original`);
+  console.log(
+    `  compressed       : ${tokens.count(content, MODEL).toLocaleString('en-US')} -> ${tokens.count(small, MODEL)} tokens (${handle.technique})`,
+  );
+  console.log(
+    `  store on disk    : originals.json, ${statSync(store).size.toLocaleString('en-US')} bytes`,
+  );
+  console.log(
+    `  handle.toDict()  : ${JSON.stringify(handle.toDict()).length} bytes of JSON - this is what you persist, not the original`,
+  );
   console.log('-- process ends here; everything in memory is lost ------------------');
 
   const child = spawnSync(process.execPath, [HERE, '--restore', workdir], { encoding: 'utf8' });
@@ -107,5 +123,6 @@ if (restoreArg !== -1) {
     process.stderr.write(child.stderr);
     throw new Error('the second process could not restore');
   }
-  if (!child.stdout.includes('sha256 matches: true')) throw new Error('the second process could not restore');
+  if (!child.stdout.includes('sha256 matches: true'))
+    throw new Error('the second process could not restore');
 }

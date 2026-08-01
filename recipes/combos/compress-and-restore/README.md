@@ -15,7 +15,9 @@ id, and **never the text**. `decompress(handle)` restores the original byte-for-
 ```bash
 cd recipes/combos/compress-and-restore
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

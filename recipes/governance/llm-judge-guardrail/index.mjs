@@ -37,7 +37,7 @@ function judgeClient() {
     chat: {
       completions: {
         create: async (kwargs) => {
-          const user = String(kwargs.messages.at(-1).content).toLowerCase();
+          const user = String(kwargs.messages.at(-1)?.content ?? '').toLowerCase();
           const trip = user.includes('ignore previous instructions') || user.includes('exfiltrate');
           const verdict = { trip, reason: trip ? 'prompt-injection' : 'looks benign' };
           return {
@@ -75,10 +75,10 @@ function makeJudge(client) {
 async function screenOne(guardrail, prompt) {
   try {
     const decisions = await applyAsync([guardrail], 'input', prompt);
-    return decisions.length ? `blocked: ${decisions.at(-1).reason}` : 'allowed';
+    return decisions.length ? `blocked: ${decisions.at(-1)?.reason}` : 'allowed';
   } catch (err) {
     if (!(err instanceof GuardrailTripped)) throw err;
-    return `blocked: ${err.decisions.at(-1).reason}`;
+    return `blocked: ${err.decisions.at(-1)?.reason}`;
   }
 }
 

@@ -18,19 +18,27 @@ import assert from 'node:assert/strict';
 import { Block, Context } from '@cendor/contextkit';
 import { LLMCall, bus, instrument } from '@cendor/core';
 import { SqueezeCompressor } from '@cendor/squeeze';
-import { BaseRetriever, TextNode } from 'llamaindex';
+import { BaseRetriever, MetadataMode, TextNode } from 'llamaindex';
 
 const MODEL = 'gpt-4o';
 
 /** A real LlamaIndex retriever returning six oversized nodes (highest score first). */
 class DocsRetriever extends BaseRetriever {
+  // `BaseRetriever`'s own constructor is PROTECTED, so a subclass has to expose a public one
+  // before `new DocsRetriever()` is legal.
+  constructor() {
+    super();
+  }
+
   async _retrieve() {
     return Array.from({ length: 6 }, (_, i) => ({
       // ⚠️ `NodeWithScore` is a TYPE-only export in the JS package — there is no class to construct.
       // A plain `{ node, score }` object is exactly what the interface asks for.
       node: new TextNode({
         id_: `doc-${i}`,
-        text: `Policy section ${i}: duplicate-charge refunds are issued within five business days once verified by billing. `.repeat(40),
+        text: `Policy section ${i}: duplicate-charge refunds are issued within five business days once verified by billing. `.repeat(
+          40,
+        ),
       }),
       score: 1.0 - i * 0.1,
     }));
@@ -41,7 +49,7 @@ function fakeOpenAI() {
   return {
     chat: {
       completions: {
-        create: async () => ({ usage: { prompt_tokens: 2800, completion_tokens: 120 } }),
+        create: async (_req) => ({ usage: { prompt_tokens: 2800, completion_tokens: 120 } }),
       },
     },
   };
@@ -72,13 +80,20 @@ const ctx = new Context({
   onMissingCompressor: 'error', // if squeeze ever goes missing, fail loudly rather than truncate
 });
 
-ctx.add(new Block('Answer only from the policy sections provided.', { priority: 10, pin: true, role: 'system' }));
+ctx.add(
+  new Block('Answer only from the policy sections provided.', {
+    priority: 10,
+    pin: true,
+    role: 'system',
+  }),
+);
 for (const [i, n] of nodes.entries()) {
   ctx.add(
-    new Block(n.node.getContent('NONE'), {
+    // `getContent` takes the MetadataMode enum, not the bare string it stringifies to.
+    new Block(n.node.getContent(MetadataMode.NONE), {
       // Retrieval score becomes packing priority — the retriever already ranked them, so contextkit
       // does not need to guess. This is the whole point of the bridge.
-      priority: Math.round(n.score * 10),
+      priority: Math.round((n.score ?? 0) * 10),
       evict: 'compress',
       role: 'user',
     }),
@@ -100,8 +115,10 @@ console.log(`dropped     : ${dropped.length} node(s) that still would not fit`);
 
 // Reversibility is the claim that separates this from truncation — prove it on a real handle.
 const withHandle = compressed.find((d) => d.handle);
-const restored = withHandle ? withHandle.handle.expand() : null;
-console.log(`expand()    : ${restored ? `${restored.length} chars restored byte-for-byte` : 'n/a'}`);
+const restored = withHandle?.handle ? withHandle.handle.expand() : null;
+console.log(
+  `expand()    : ${restored ? `${restored.length} chars restored byte-for-byte` : 'n/a'}`,
+);
 
 const client = instrument(fakeOpenAI());
 await client.chat.completions.create({ model: MODEL, messages });
@@ -113,11 +130,8 @@ assert.ok(
 );
 assert.ok(compressed.length > 0, 'nothing was compressed — squeeze was never reached');
 assert.ok(withHandle, 'a compressed block carries no handle, so the compression is not reversible');
-assert.ok(restored.length > 0, 'expand() returned nothing');
-assert.ok(
-  restored.startsWith('Policy section'),
-  'expand() did not restore the original node text',
-);
+assert.ok(restored, 'expand() returned nothing');
+assert.ok(restored.startsWith('Policy section'), 'expand() did not restore the original node text');
 assert.equal(calls.length, 1, 'the packed prompt never reached the instrumented client');
 
 console.log(

@@ -13,7 +13,9 @@ CLI, then broken by a single flipped byte.
 ```bash
 cd recipes/governance/eu-ai-act-evidence
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

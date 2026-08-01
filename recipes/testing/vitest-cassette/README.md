@@ -18,8 +18,10 @@ same code path, same assertions, zero provider calls, no key, no network.
 ```bash
 cd recipes/testing/vitest-cassette
 npm install
-npm test          # the suite
-node index.mjs    # the CI wrapper
+npm test          # the suite (vitest runs agent.test.mts directly)
+node index.mjs    # the CI wrapper — plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

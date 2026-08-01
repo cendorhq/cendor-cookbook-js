@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Assert every recipe README's **"Live switch:"** claim matches what `index.mjs` actually implements.
+ * Assert every recipe README's **"Live switch:"** claim matches what `index.mts` actually implements.
  *
  * ⚠️ Why this exists. On 2026-08-01 five brand-new recipes shipped a footer reading
  * `Live switch: RECORD=1` while their `index.mjs` contained no `process.env.RECORD` at all. Nothing
@@ -10,8 +10,11 @@
  * invisible to every other gate in this repo, because a README is not executable.
  *
  * The rule, both ways:
- *   • a README that names a switch  ⇒ `index.mjs` must read that env var
- *   • a README that says "none"     ⇒ `index.mjs` must read no live-switch env var
+ *   • a README that names a switch  ⇒ `index.mts` must read that env var
+ *   • a README that says "none"     ⇒ `index.mts` must read no live-switch env var
+ *
+ * The `.mts` is the source of truth: the `.mjs` beside it is generated from it, so checking the
+ * source catches the claim at the place a contributor would fix it.
  *
  * The second direction matters as much as the first: a recipe that quietly grew a live path without
  * saying so is a recipe that can reach the network on someone's laptop unannounced.
@@ -56,21 +59,21 @@ export function checkOne(slug, readme, source) {
 
   if (claimsNone && impl.length > 0) {
     return [
-      `${slug}: README says "Live switch: ${claim}" but index.mjs reads ${impl.join(', ')} — ` +
+      `${slug}: README says "Live switch: ${claim}" but index.mts reads ${impl.join(', ')} — ` +
         'the recipe has an undocumented path to a real provider',
     ];
   }
   if (!claimsNone) {
     if (impl.length === 0) {
       return [
-        `${slug}: README promises "Live switch: ${claim}" but index.mjs reads none of ` +
+        `${slug}: README promises "Live switch: ${claim}" but index.mts reads none of ` +
           `${SWITCH_VARS.join('/')} — the switch does not exist`,
       ];
     }
     const named = impl.filter((v) => claim.includes(v));
     if (named.length === 0) {
       return [
-        `${slug}: README promises "Live switch: ${claim}" but index.mjs reads ${impl.join(', ')} — ` +
+        `${slug}: README promises "Live switch: ${claim}" but index.mts reads ${impl.join(', ')} — ` +
           'the documented variable is not the one the code checks',
       ];
     }
@@ -128,7 +131,7 @@ for (const cat of readdirSync(RECIPES)) {
     const dir = join(RECIPES, cat, rec);
     if (!statSync(dir).isDirectory()) continue;
     const readme = join(dir, 'README.md');
-    const source = join(dir, 'index.mjs');
+    const source = join(dir, 'index.mts');
     if (!existsSync(readme) || !existsSync(source)) continue;
     checked++;
     problems.push(

@@ -19,7 +19,9 @@ seams are open to you.
 ```bash
 cd recipes/libs/core-seams
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

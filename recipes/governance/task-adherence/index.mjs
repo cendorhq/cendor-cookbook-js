@@ -33,11 +33,13 @@ function judgeClient() {
     chat: {
       completions: {
         create: async (kwargs) => {
-          const proposed = String(kwargs.messages.at(-1).content).toLowerCase();
+          const proposed = String(kwargs.messages.at(-1)?.content ?? '').toLowerCase();
           const aligned = proposed.includes('search_flights') || proposed.includes('book_flight');
           const verdict = {
             trip: !aligned, // trip == misaligned
-            reason: aligned ? 'on-task: a flight search' : 'off-task: unrelated to booking a flight',
+            reason: aligned
+              ? 'on-task: a flight search'
+              : 'off-task: unrelated to booking a flight',
           };
           return {
             choices: [{ message: { content: JSON.stringify(verdict) } }],
@@ -72,7 +74,7 @@ async function screen(rail, tool, args) {
   const ctx = { stage: 'tool_call', tool, toolArgs: args, instruction: INSTRUCTION };
   const { decisions } = await evaluateAsync([rail], 'tool_call', args, ctx);
   const flags = decisions.filter((d) => d.action === 'flag');
-  return flags.length ? `flagged: ${flags.at(-1).reason}` : 'aligned';
+  return flags.length ? `flagged: ${flags.at(-1)?.reason}` : 'aligned';
 }
 
 /** Screen both proposed calls in one cassette session — recorded once, replayed thereafter. */
@@ -104,6 +106,9 @@ const byLabel = Object.fromEntries(outcomes);
 // BOTH halves matter. A rail that flags everything would satisfy the second assertion alone, and
 // would be useless — an agent that cannot call any tool is not aligned, it is broken.
 assert.equal(byLabel.aligned, 'aligned', 'an on-task tool call was flagged as drift');
-assert.ok(byLabel['off-task'].startsWith('flagged:'), 'delete_account was NOT flagged against a flight-booking instruction');
+assert.ok(
+  byLabel['off-task'].startsWith('flagged:'),
+  'delete_account was NOT flagged against a flight-booking instruction',
+);
 assert.ok(calls >= 2, `the judge's own calls did not reach the bus (got ${calls})`);
 assert.ok(tokens > 0, "the judge's token usage was not recorded");

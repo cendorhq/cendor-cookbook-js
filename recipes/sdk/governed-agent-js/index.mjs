@@ -34,7 +34,22 @@ function stubClient(answer) {
         create: async (params) => {
           if (calls++ === 0 && params.tools) {
             return {
-              choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'refund', arguments: JSON.stringify({ orderId: '123' }) } }] } }],
+              choices: [
+                {
+                  finish_reason: 'tool_calls',
+                  message: {
+                    role: 'assistant',
+                    content: null,
+                    tool_calls: [
+                      {
+                        id: 'call_1',
+                        type: 'function',
+                        function: { name: 'refund', arguments: JSON.stringify({ orderId: '123' }) },
+                      },
+                    ],
+                  },
+                },
+              ],
               usage: { prompt_tokens: 60, completion_tokens: 12 },
             };
           }
@@ -57,7 +72,11 @@ const refund = tool((a) => `refunded order ${a.orderId}`, {
 
 const dir = mkdtempSync(join(tmpdir(), 'cendor-recipe-'));
 const auditPath = join(dir, 'audit.jsonl');
-const audit = new AuditLog('refund-bot', { riskTier: 'high', path: auditPath, signingKey: 'demo-key' });
+const audit = new AuditLog('refund-bot', {
+  riskTier: 'high',
+  path: auditPath,
+  signingKey: 'demo-key',
+});
 
 const agent = new Agent({
   name: 'refund-bot',
@@ -71,11 +90,15 @@ const result = await withBudget({ usd: 0.5, onExceed: 'block' }, () =>
   run(agent, 'I want a refund for order 123', { audit }),
 );
 audit.detach();
+assert.ok(result, 'the governed run produced no result');
 
 console.log('output :', result.output);
 console.log('cost   :', result.cost.toString());
 console.log('tokens :', result.usage.totalTokens);
-console.log('tools  :', result.toolSteps.map((s) => s.name));
+console.log(
+  'tools  :',
+  result.toolSteps.map((s) => s.name),
+);
 console.log('trace  :', result.traceId);
 const [ok, detail] = verify(auditPath, { key: 'demo-key' });
 console.log('audit  :', ok, '—', detail);
@@ -85,7 +108,12 @@ console.log('audit  :', ok, '—', detail);
 // and exit 0 — which is exactly the failure a cookbook is supposed to catch.
 assert.equal(result.toolSteps.length, 1, 'the agent did not run its one tool');
 assert.equal(result.toolSteps[0].name, 'refund');
-assert.ok(result.output?.length, 'the agent produced no final answer');
+// `Result.output` is `unknown` — an agent configured with an `outputType` returns the PARSED
+// object, not text. This one has no outputType, so it is the model's string.
+assert.ok(
+  typeof result.output === 'string' && result.output.length > 0,
+  'the agent produced no final answer',
+);
 // Money is decimal.js, never a float — `.amount.gt(0)`, not `Number(...) > 0`.
 // ⚠️ `result.cost` is a `Money`, and `Money.gt()` compares against another `Money`: pass it a
 // number and it fails `currency mismatch: USD vs undefined`, which reads like a bug in your

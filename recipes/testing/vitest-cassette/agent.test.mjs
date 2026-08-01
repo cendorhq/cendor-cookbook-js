@@ -23,11 +23,15 @@ beforeEach(() => {
 
 describe('answerRefundQuestion', () => {
   it('records on the first run and replays on the second, with zero provider calls', async () => {
-    const recorded = await cassette.using(tape, { mode: 'record' }, () => answerRefundQuestion(QUESTION));
+    const recorded = await cassette.using(tape, { mode: 'record' }, () =>
+      answerRefundQuestion(QUESTION),
+    );
     const afterRecord = providerCalls.n;
 
     providerCalls.n = 0;
-    const replayed = await cassette.using(tape, { mode: 'replay' }, () => answerRefundQuestion(QUESTION));
+    const replayed = await cassette.using(tape, { mode: 'replay' }, () =>
+      answerRefundQuestion(QUESTION),
+    );
 
     expect(afterRecord).toBe(1); //           the recording pass really called the provider
     expect(providerCalls.n).toBe(0); //       the replay did NOT — this is the $0 claim
@@ -37,7 +41,9 @@ describe('answerRefundQuestion', () => {
   it('asserts on MEANING, so a re-recorded fixture does not break the test', async () => {
     await cassette.using(tape, { mode: 'record' }, () => answerRefundQuestion(QUESTION));
     providerCalls.n = 0;
-    const answer = await cassette.using(tape, { mode: 'replay' }, () => answerRefundQuestion(QUESTION));
+    const answer = await cassette.using(tape, { mode: 'replay' }, () =>
+      answerRefundQuestion(QUESTION),
+    );
 
     // `semanticMatch`, not a string equality. A replayed answer is byte-identical today; when the
     // fixture is re-recorded against a live model, the wording WILL differ, and a `toBe(...)` here

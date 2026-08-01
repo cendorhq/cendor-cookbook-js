@@ -11,8 +11,10 @@
  * `.github/workflows/ci.yml`, and every category in the matrix must exist on disk (a matrix row
  * pointing at a deleted category fails the shard's own empty check, but is worth naming here too).
  *
- * Also checks the shape a shard depends on: each recipe directory has a `package.json` and an
- * `index.mjs`.
+ * Also checks the shape a shard depends on: each recipe directory has a `package.json`, an
+ * `index.mts` (the TypeScript source a contributor edits) and the `index.mjs` generated from it
+ * (what `node index.mjs` runs). A recipe missing the `.mts` has escaped the typecheck entirely —
+ * `check-ts-js-sync.mjs` would still pass, because its sweep starts from the sources it can see.
  *
  * Negative control: `node scripts/check-recipe-coverage.mjs --self-test` fabricates an uncovered
  * category in memory and asserts this script reports it. A check that cannot fail is not a check.
@@ -119,7 +121,7 @@ let recipeCount = 0;
 for (const c of onDisk) {
   for (const r of recipeDirs(RECIPES, c)) {
     recipeCount++;
-    for (const f of ['package.json', 'index.mjs']) {
+    for (const f of ['package.json', 'index.mts', 'index.mjs']) {
       if (!existsSync(join(RECIPES, c, r, f))) {
         problems.push(`recipes/${c}/${r}/ has no ${f}`);
       }

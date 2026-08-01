@@ -72,17 +72,26 @@ const providerCalls = { n: 0 };
 function fakeBedrockClient() {
   return {
     config: { serviceId: 'Bedrock Runtime' },
-    send: async (command) => {
+    send: async (_command) => {
       providerCalls.n++;
       return {
         output: { message: { role: 'assistant', content: [{ text: 'Refund queued.' }] } },
         stopReason: 'end_turn',
-        usage: { inputTokens: IN_TOKENS, outputTokens: OUT_TOKENS, totalTokens: IN_TOKENS + OUT_TOKENS },
+        usage: {
+          inputTokens: IN_TOKENS,
+          outputTokens: OUT_TOKENS,
+          totalTokens: IN_TOKENS + OUT_TOKENS,
+        },
         $metadata: { httpStatusCode: 200 },
       };
     },
   };
 }
+/**
+ * Handed the offline fake AND — under RECORD=1 — a real `BedrockRuntimeClient`, whose `send` is
+ * generic over every Bedrock command. This helper needs only 'something with a send', so that is
+ * what it asks for.
+ */
 
 const converse = (client, text) =>
   client.send(
@@ -117,7 +126,11 @@ async function offlineDemo() {
   const chain = join(tmp, 'audit.jsonl');
   const tape = join(tmp, 'bedrock.cassette.json');
 
-  const audit = new AuditLog('bedrock-bot', { riskTier: 'limited', path: chain, signingKey: SIGNING_KEY });
+  const audit = new AuditLog('bedrock-bot', {
+    riskTier: 'limited',
+    path: chain,
+    signingKey: SIGNING_KEY,
+  });
 
   // ---- the honest first look: is this id priced at all? -------------------------------------------
   let pricedBefore = true;
@@ -137,6 +150,7 @@ async function offlineDemo() {
       } catch (err) {
         if (!(err instanceof GuardrailTripped)) throw err;
         const trip = err.decisions.at(-1);
+        assert.ok(trip, 'GuardrailTripped carried no decisions');
         console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
         console.log(`            provider saw ${providerCalls.n} call(s) => $0 spent on it`);
       }
@@ -152,7 +166,9 @@ async function offlineDemo() {
             await tokenCapped();
           } catch (err) {
             if (!(err instanceof BudgetExceeded)) throw err;
-            console.log(`budget    : token cap bound with NO price at all — ${err.constructor.name}`);
+            console.log(
+              `budget    : token cap bound with NO price at all — ${err.constructor.name}`,
+            );
             dec.flag('token cap reached', { action: 'blocked', severity: 'warning', data: 'cap' });
           }
           dec.record({ model: MODEL_ID });
@@ -171,7 +187,9 @@ async function offlineDemo() {
   // (3b) A USD cap needs a rate. One line supplies it — you hold the number, not us.
   prices.registerModelPrice(MODEL_ID, { input: 0.06, output: 0.24 }); // USD per 1M tokens
   const after = prices.estimate(MODEL_ID, IN_TOKENS, { outputTokens: OUT_TOKENS });
-  console.log(`            registerModelPrice() -> the SAME call now costs $${after.amount.toString()}`);
+  console.log(
+    `            registerModelPrice() -> the SAME call now costs $${after.amount.toString()}`,
+  );
 
   reset();
   const usdCapped = budget({ usd: 0.001, onExceed: 'block' })(async () => {
@@ -200,11 +218,26 @@ async function offlineDemo() {
   // bound. Asserting `pricedBefore === false` is the point of the whole recipe: if a future snapshot
   // starts carrying this id, this line fails and the prose above stops being true — which is exactly
   // when someone should be told.
-  const one = calls.find((c) => c.usage.inputTokens > 0);
+  // `usage` is nullable on LLMCall, so the predicate has to say so — and `find` returns
+  // `T | undefined`, which the assert turns into a named failure instead of a TypeError.
+  const one = calls.find((c) => (c.usage?.inputTokens ?? 0) > 0);
+  assert.ok(one?.usage, 'no call on the bus carried normalized usage');
   assert.ok(one, 'no Bedrock call reached the bus — send(new ConverseCommand(…)) was not captured');
-  assert.equal(one.usage.inputTokens, IN_TOKENS, 'camelCase `usage.inputTokens` was not normalized');
-  assert.equal(one.usage.outputTokens, OUT_TOKENS, 'camelCase `usage.outputTokens` was not normalized');
-  assert.equal(pricedBefore, false, `${MODEL_ID} is now in the price table — this recipe's premise changed`);
+  assert.equal(
+    one.usage.inputTokens,
+    IN_TOKENS,
+    'camelCase `usage.inputTokens` was not normalized',
+  );
+  assert.equal(
+    one.usage.outputTokens,
+    OUT_TOKENS,
+    'camelCase `usage.outputTokens` was not normalized',
+  );
+  assert.equal(
+    pricedBefore,
+    false,
+    `${MODEL_ID} is now in the price table — this recipe's premise changed`,
+  );
   assert.ok(after.amount.gt(0), 'registerModelPrice() did not make the model priceable');
   assert.ok(usdRun > 0 && usdRun < 50, `the USD cap should bind mid-loop, got ${usdRun} calls`);
   assert.equal(extra, 0, 'a replayed call must not reach the provider');

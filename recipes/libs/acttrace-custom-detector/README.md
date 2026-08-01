@@ -20,7 +20,9 @@ Registered detectors are picked up by `scan()`, `redact()`, and — via the acti
 ```bash
 cd recipes/libs/acttrace-custom-detector
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

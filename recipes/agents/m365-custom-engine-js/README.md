@@ -25,6 +25,8 @@ broken governance path exits non-zero.
 
 ```bash
 cd recipes/agents/m365-custom-engine-js && npm install && node index.mjs
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

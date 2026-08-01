@@ -14,7 +14,9 @@ recorded from run 1 is replayed against **run 2's** prompt with a client that th
 ```bash
 cd recipes/combos/deterministic-assembly
 npm install
-node index.mjs
+node index.mjs        # plain JS, no build step
+# ...or run the TypeScript source it is generated from:
+# npx tsx index.mts
 ```
 
 ## Expected output

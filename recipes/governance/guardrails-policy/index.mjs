@@ -85,7 +85,9 @@ try {
       model: 'gpt-4o',
       messages: [{ role: 'user', content: 'my key is sk-abcdef123456' }],
     });
-    sent = calls.at(-1).messages[0].content;
+    const delivered = calls.at(-1);
+    assert.ok(delivered, 'the redacted request never reached the fake provider');
+    sent = delivered.messages[0].content;
     console.log(`REDACTED before send: provider received ${JSON.stringify(sent)}`);
     try {
       await client.chat.completions.create({
@@ -104,21 +106,37 @@ try {
 }
 
 console.log('\nevery decision proves which policy was active:');
+// A chain entry's `payload` is `PyValue`. Naming the shape here doubles as documentation of the
+// evidence a policy decision leaves behind — the version and hash are the whole point.
+
 const decisions = audit.entries.filter((e) => e.type === 'guardrail_decision');
 for (const e of decisions) {
-  const ver = e.payload.metadata.policy_version;
-  console.log(`  ${String(e.payload.action).padEnd(6)} ${String(e.payload.guardrail).padEnd(12)} policy=${ver}`);
+  const p = e.payload;
+  console.log(
+    `  ${p.action.padEnd(6)} ${p.guardrail.padEnd(12)} policy=${p.metadata.policy_version}`,
+  );
 }
 const [ok] = verify(path);
-console.log(`\nchain verifies: ${ok}  (policy_hash ${policy.policyHash.slice(0, 14)}… is in the evidence)`);
+console.log(
+  `\nchain verifies: ${ok}  (policy_hash ${policy.policyHash.slice(0, 14)}… is in the evidence)`,
+);
 
-assert.equal(calls.length, 1, `the blocked prompt should never have been sent; ${calls.length} calls`);
+assert.equal(
+  calls.length,
+  1,
+  `the blocked prompt should never have been sent; ${calls.length} calls`,
+);
 assert.ok(!sent.includes('sk-abcdef123456'), 'the provider received the raw key');
-assert.equal(decisions.length, 2, `expected a redact and a block in the chain, got ${decisions.length}`);
+assert.equal(
+  decisions.length,
+  2,
+  `expected a redact and a block in the chain, got ${decisions.length}`,
+);
 // The whole claim of the recipe: the evidence names the policy that produced it. A chain that
 // verifies but cannot say WHICH policy was active answers the auditor's question with a shrug.
 for (const e of decisions) {
-  assert.equal(e.payload.metadata.policy_version, POLICY.version, 'a decision carries no policy version');
-  assert.ok(e.payload.metadata.policy_hash, 'a decision carries no policy hash');
+  const p = e.payload;
+  assert.equal(p.metadata.policy_version, POLICY.version, 'a decision carries no policy version');
+  assert.ok(p.metadata.policy_hash, 'a decision carries no policy hash');
 }
 assert.equal(ok, true, 'the policy decision chain failed verify()');

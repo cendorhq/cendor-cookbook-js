@@ -41,7 +41,9 @@ const restored = handle.expand();
 const identical = restored === logs;
 
 console.log(`kind detected : ${handle.kind}  (technique: ${handle.technique})`);
-console.log(`tokens        : ${beforeTok.toLocaleString('en-US')} -> ${afterTok.toLocaleString('en-US')}  (target 400)`);
+console.log(
+  `tokens        : ${beforeTok.toLocaleString('en-US')} -> ${afterTok.toLocaleString('en-US')}  (target 400)`,
+);
 console.log(
   `${beforeKb.toFixed(1)} KB -> ${afterKb.toFixed(1)} KB (${pct.toFixed(1)}% smaller) · ` +
     `expand(): byte-for-byte identical ${identical ? 'OK' : 'FAIL'}`,

@@ -82,6 +82,17 @@ jobs:
           shopt -s nullglob
           dirs=(recipes/${{ matrix.category }}/*/)
           node scripts/check-one-core.mjs "${dirs[@]%/}"
+      # G2 — the recipes ARE TypeScript. Every `index.mts` typechecks under `strict` against the
+      # REAL published @cendor/* types (installed above, per recipe), and the committed `index.mjs`
+      # beside it must be exactly what that source generates.
+      #
+      # This runs INSIDE the shard on purpose: typechecking needs each recipe's own node_modules,
+      # which the step above already installed. Running it on both Node versions also proves the
+      # generator is deterministic — same source, same bytes, either runtime.
+      - name: G2 — typecheck .mts + .mjs is in sync
+        run: |
+          npm install --prefix scripts --no-audit --no-fund
+          node scripts/check-ts-js-sync.mjs recipes/${{ matrix.category }}
 
   coverage:
     # A recipe CI never runs is a README promise nobody checks. This asserts every category
@@ -94,6 +105,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+      - run: node scripts/check-recipe-coverage.mjs --self-test
       - run: node scripts/check-recipe-coverage.mjs
       # A README is not executable, so no other gate can see a footer that promises a `RECORD=1`
       # live path the code never implements. Five brand-new recipes shipped exactly that on
@@ -101,3 +113,8 @@ jobs:
       # does not exist, AND an undocumented one that does.
       - run: node scripts/check-live-switches.mjs --self-test
       - run: node scripts/check-live-switches.mjs
+      # The sync gate's own negative control. It runs here rather than in a shard because it needs
+      # no recipe deps — and because a gate whose self-test never runs is a gate nobody has checked.
+      - name: install tooling
+        run: npm install --prefix scripts --no-audit --no-fund
+      - run: node scripts/check-ts-js-sync.mjs --self-test

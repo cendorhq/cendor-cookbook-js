@@ -22,7 +22,19 @@ import assert from 'node:assert/strict';
 import { bus } from '@cendor/core';
 import { apply, rules, semantic } from '@cendor/guardrails';
 
-const VOCAB = ['write', 'create', 'build', 'make', 'program', 'app', 'script', 'code', 'tool', 'hello', 'world'];
+const VOCAB = [
+  'write',
+  'create',
+  'build',
+  'make',
+  'program',
+  'app',
+  'script',
+  'code',
+  'tool',
+  'hello',
+  'world',
+];
 const INDEX = new Map(VOCAB.map((w, i) => [w, i]));
 
 /**
@@ -60,7 +72,9 @@ for (const turn of ['write python code for hello world', 'create a hello world a
   const decs = apply([denylist, category], 'input', turn);
   const fired = new Set(decs.map((d) => d.guardrail));
   console.log(`\n${JSON.stringify(turn)}`);
-  console.log(`  denylist fired: ${fired.has('denylist')}   customCategory fired: ${fired.has('code_requests')}`);
+  console.log(
+    `  denylist fired: ${fired.has('denylist')}   customCategory fired: ${fired.has('code_requests')}`,
+  );
   for (const d of decs) console.log(`    - ${d.guardrail} ${d.action}: ${d.reason}`);
 }
 
@@ -71,8 +85,13 @@ assert.deepEqual(
   ['code_requests'],
   'the paraphrase should fire ONLY the semantic category — if the denylist fired too, the demo proves nothing',
 );
-assert.equal(para[0].metadata.category, 'code_requests');
-assert.ok(para[0].metadata.score > 0.3, 'the recorded similarity score is below the threshold that fired it');
+// A decision's `metadata` is an open record, so the recipe names the two fields it reads.
+const paraMeta = para[0].metadata;
+assert.equal(paraMeta.category, 'code_requests');
+assert.ok(
+  paraMeta.score > 0.3,
+  'the recorded similarity score is below the threshold that fired it',
+);
 
 // ...and the literal phrasing must still fire BOTH, or "literal vs meaning" is not a contrast.
 const literal = apply([denylist, category], 'input', 'write python code for hello world');

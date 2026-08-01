@@ -39,8 +39,8 @@ const IN_TOKENS = 9_000;
 const CACHED = 6_000; // billed at the cheaper cached-input rate
 const OUT_TOKENS = 1_200;
 const REASONING = 800; // billed as output, and invisible in the text you get back
-
 /** Stand-in for `new OpenAI()` — the Responses API shape, with reasoning + cached details. */
+
 function fakeOpenAIResponses(seen) {
   return {
     responses: {
@@ -72,7 +72,11 @@ const answer = budget({ usd: 0.4, onExceed: 'block', outputReserve: OUT_TOKENS }
 async function recordLive() {
   const { default: OpenAI } = await import('openai');
   const client = instrument(new OpenAI());
-  const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'openai-responses.json');
+  const fixture = join(
+    dirname(fileURLToPath(import.meta.url)),
+    'fixtures',
+    'openai-responses.json',
+  );
   await cassette.use(fixture, { mode: 'record' })(async () => {
     await client.responses.create({ model: MODEL, input: 'Say hi in five words.' });
   })();
@@ -104,6 +108,7 @@ async function offlineDemo() {
       } catch (err) {
         if (!(err instanceof GuardrailTripped)) throw err;
         const trip = err.decisions.at(-1);
+        assert.ok(trip, 'GuardrailTripped carried no decisions');
         console.log(`gate      : BLOCKED by ${trip.guardrail} (${trip.stage}) - ${trip.reason}`);
         console.log(`            provider saw ${seen.length} call(s) => $0 spent on it`);
       }
@@ -128,11 +133,21 @@ async function offlineDemo() {
   }
 
   // The distinctive bit: the four numbers a prompt+completion sum would have collapsed into two.
-  const one = calls.find((c) => c.usage.inputTokens > 0);
+  // `usage` is nullable on LLMCall, so the predicate has to say so — and `find` returns
+  // `T | undefined`, which the assert turns into a named failure instead of a TypeError.
+  const one = calls.find((c) => (c.usage?.inputTokens ?? 0) > 0);
+  assert.ok(one?.usage, 'no call on the bus carried normalized usage');
+  assert.ok(one.cost, 'the call reached the bus unpriced');
   console.log('usage     : the Responses API reports four numbers, not two');
-  console.log(`            input      ${one.usage.inputTokens} (of which ${one.usage.cachedTokens} cached, billed cheaper)`);
-  console.log(`            output     ${one.usage.outputTokens} (of which ${one.usage.reasoningTokens} reasoning, billed but unseen)`);
-  console.log(`            cost       $${one.cost.amount.toString()}  <- from prices, not a literal`);
+  console.log(
+    `            input      ${one.usage.inputTokens} (of which ${one.usage.cachedTokens} cached, billed cheaper)`,
+  );
+  console.log(
+    `            output     ${one.usage.outputTokens} (of which ${one.usage.reasoningTokens} reasoning, billed but unseen)`,
+  );
+  console.log(
+    `            cost       $${one.cost.amount.toString()}  <- from prices, not a literal`,
+  );
 
   const before = seen.length;
   await cassette.using(tape, { mode: 'record' }, () =>
@@ -156,8 +171,16 @@ async function offlineDemo() {
   // openai-node it is a HELPER built on `create`, so a target there would double-count one request.
   // (Python needs its own `parse` targets, because there `parse` POSTs its own request. Same shape as
   // Anthropic's `messages.parse` — see the trap registry.)
-  assert.equal(one.usage.cachedTokens, CACHED, 'cached tokens were not normalized off input_tokens_details');
-  assert.equal(one.usage.reasoningTokens, REASONING, 'reasoning tokens were not normalized off output_tokens_details');
+  assert.equal(
+    one.usage.cachedTokens,
+    CACHED,
+    'cached tokens were not normalized off input_tokens_details',
+  );
+  assert.equal(
+    one.usage.reasoningTokens,
+    REASONING,
+    'reasoning tokens were not normalized off output_tokens_details',
+  );
   assert.ok(one.cost.amount.gt(0), 'the Responses call reached the bus unpriced');
   assert.equal(extra, 0, 'a replayed call must not reach the provider');
   assert.ok(replayed.at(-1)?.metadata.replayed, 'the replay was not marked replayed');
