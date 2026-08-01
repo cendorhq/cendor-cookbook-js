@@ -10,6 +10,6 @@
     "start": "node index.mjs"
   },
   "dependencies": {
-    "@cendor/guardrails": "^3.1.0"
+    "@cendor/guardrails": "^3.1.1"
   }
 }

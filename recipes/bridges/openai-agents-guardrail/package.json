@@ -10,7 +10,7 @@
     "start": "node index.mjs"
   },
   "dependencies": {
-    "@cendor/guardrails": "^3.1.0",
+    "@cendor/guardrails": "^3.1.1",
     "@openai/agents": "^0.14.2"
   }
 }
