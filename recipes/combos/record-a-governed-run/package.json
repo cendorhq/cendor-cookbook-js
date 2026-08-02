@@ -12,7 +12,7 @@
   "dependencies": {
     "@cendor/acttrace": "^3.1.0",
     "@cendor/cassette": "^3.0.0",
-    "@cendor/core": "^3.6.0",
+    "@cendor/core": "^3.6.1",
     "@cendor/tokenguard": "^3.2.0"
   }
 }
