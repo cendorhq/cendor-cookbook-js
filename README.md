@@ -88,7 +88,8 @@ There is **no workspace and no root install**. Every recipe is a self-contained 
 | [langchain-middleware](recipes/bridges/langchain-middleware/) | **bridge** | A cendor block → a `beforeModel` throw, before the model call | `guardrails` | ✓ |
 | [mcp-tool-gating](recipes/bridges/mcp-tool-gating/) | **bridge** | A blocked tool returns a **result the model can read**, and the body provably does not run | `guardrails` | ✓ |
 | [openai-agents-guardrail](recipes/bridges/openai-agents-guardrail/) | **bridge** | A cendor block → `tripwireTriggered`; a fail-closed block *throws*, so both paths map | `guardrails` | ✓ |
-| [azure-foundry-otel](recipes/frameworks/azure-foundry-otel/) | **framework** | Foundry governance as ordinary OTel spans — and two ways to accidentally export nothing | `core` `tokenguard` `acttrace` | ✓ |
+| [azure-foundry-otel](recipes/frameworks/azure-foundry-otel/) | **framework** | A managed runtime owns the loop — ingest its `gen_ai.*` spans and budget calls you never made | `core` `tokenguard` `acttrace` | ✓ |
+| [azure-foundry-otel-export](recipes/frameworks/azure-foundry-otel-export/) | **framework** | Foundry governance as ordinary OTel spans — and two ways to accidentally export nothing | `core` `tokenguard` `acttrace` | ✓ |
 | [langchain](recipes/frameworks/langchain/) | **framework** | One callback handler; the chain is unchanged and `provider` honestly reads `langchain` | `core` `tokenguard` `acttrace` | ✓ |
 | [llamaindex](recipes/frameworks/llamaindex/) | **framework** | Retrieval score becomes packing priority; contextkit **auto-discovers** squeeze | `core` `contextkit` `squeeze` | ✓ |
 | [openai-agents-sdk](recipes/frameworks/openai-agents-sdk/) | **framework** | Spend by **agent**, not just by model — 18× apart on one model | `core` `tokenguard` `acttrace` | ✓ |
@@ -96,7 +97,7 @@ There is **no workspace and no root install**. Every recipe is a self-contained 
 | [otel-export](recipes/observability/otel-export/) | **observability** | Metrics + spans with no Cendor-specific exporter; `outputReserve` is what makes a refusal exportable | `core` `tokenguard` `acttrace` | ✓ |
 | [vitest-cassette](recipes/testing/vitest-cassette/) | **testing** | A vitest suite that never calls a provider — and a wrapper that asserts tests actually ran | `core` `cassette` | ✓ |
 
-**52 recipes across 11 categories**, and every one of them has a Python twin of the **same folder
+**54 recipes across 11 categories**, and every one of them has a Python twin of the **same folder
 name** in [cendor-cookbook](https://github.com/cendorhq/cendor-cookbook). Each recipe's README links
 to its own twin.
 

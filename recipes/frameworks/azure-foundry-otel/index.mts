@@ -1,22 +1,18 @@
 /**
- * azure-foundry-otel (JS) — Microsoft Foundry governance, exported as OpenTelemetry spans.
+ * azure-foundry-otel (JS) — budget + audit calls your process never made.
  *
- * This is the two halves of the Foundry story in one file:
+ * A managed runtime (e.g. the Agent Service in Microsoft Foundry, formerly Azure AI Foundry) owns the
+ * agent loop server-side; your client never sees the calls. But it emits OpenTelemetry `gen_ai.*`
+ * spans. Forward each span's attributes to `otel.ingest()` and the call lands on the same cendor bus
+ * — so tokenguard budgets it and acttrace records it, exactly as if you'd made the call yourself.
  *
- *   1. the **v1 GA endpoint** with the standard `openai` client — no `AzureOpenAI` class, no
- *      `api-version`, and no `azure-ai-inference` (which `instrument()` captures NOTHING from);
- *   2. a deployment name is **unpriced**, so `prices.registerDeployment(...)` is what makes a USD
- *      budget able to bind at all;
+ * ⚠️ **There is no client to `instrument()` here, and that is the point.** `instrument()` wraps a
+ * client you hold; in a managed runtime you hold nothing. `otel.ingest()` is the other adoption
+ * point — telemetry in rather than a call intercepted. If you *do* hold the client, you want
+ * `instrument()` and not this: see `frameworks/azure-foundry-otel-export`, which holds one and sends
+ * governance the other way (spans OUT to your backend).
  *
- * ...and then every governance event lands in your existing OTel backend as a standard span. Azure
- * Monitor is one `useAzureMonitor()` call in production; here it is an in-memory exporter so the
- * recipe stays offline and its assertions can only pass if something was really emitted.
- *
- * ⚠️ **Injected tracer, not a global provider.** `new OTelMirror(tracer)` takes the instrument
- * explicitly. Asserting against the global provider is an assertion that passes whether or not your
- * code emitted anything — there is always *a* provider, and a no-op one records nothing.
- *
- * Offline: a fake OpenAI-shaped client + in-memory OTel. No key, no network.
+ * Fully offline by nature (in-memory spans; no Azure account, no collector).
  * Run:  npm install && node index.mjs
  */
 import assert from 'node:assert/strict';
@@ -24,116 +20,78 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { AuditLog, OTelMirror, verify } from '@cendor/acttrace';
-import { LLMCall, bus, instrument, prices } from '@cendor/core';
-import { BudgetExceeded, budget, reset } from '@cendor/tokenguard';
-import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { AuditLog, verify } from '@cendor/acttrace';
+import { otel } from '@cendor/core';
+import { report, reset, track } from '@cendor/tokenguard';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-node';
 
 const SIGNING_KEY = 'demo-signing-key';
-const DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT ?? 'prod-gpt4o-eastus';
-const BASE_MODEL = process.env.AZURE_BASE_MODEL ?? 'gpt-4o';
-const IN_TOKENS = 11_000;
-const OUT_TOKENS = 1_500;
-// ⚠️ A REAL prompt, not a one-word stub. The pre-flight projection counts the tokens actually in
-// `messages`; the fake's reported `usage` only governs what SETTLES. With a one-character prompt the
-// projection is ~nothing, the cap is never crossed before the call, and what you get is a
-// POST-flight overspend — which throws the same `BudgetExceeded` but emits NO `BudgetEvent`, so the
-// refusal never reaches your telemetry backend. Measured while writing this recipe.
-const CLAIM = "The claimant's policy history plus the adjuster's notes and the repair estimate. ".repeat(1000);
 
-/** Stand-in for the v1 GA client. Foundry echoes the DEPLOYMENT name back, not a model id. */
-function fakeFoundry() {
-  return {
-    chat: {
-      completions: {
-        create: async (_req: { model: string; messages: { role: string; content: string }[] }) => ({
-          choices: [{ message: { content: 'Approved.' } }],
-          usage: { prompt_tokens: IN_TOKENS, completion_tokens: OUT_TOKENS },
-          model: DEPLOYMENT,
-        }),
-      },
-    },
-  };
+// Three turns of a Foundry-hosted agent, as gen_ai.* span attributes (model, tokens, cache).
+const FOUNDRY_TURNS = [
+  { model: 'gpt-4o', in: 1200, out: 400, cached: 0 },
+  { model: 'gpt-4o', in: 1500, out: 350, cached: 300 },
+  { model: 'gpt-4o', in: 900, out: 220, cached: 0 },
+];
+
+/** Stand in for Foundry's telemetry: real OTel spans carrying gen_ai.* attributes. */
+function emitFoundrySpans() {
+  const exporter = new InMemorySpanExporter();
+  const provider = new BasicTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
+  const tracer = provider.getTracer('azure-foundry-agent');
+  for (const turn of FOUNDRY_TURNS) {
+    const span = tracer.startSpan('chat gpt-4o');
+    span.setAttribute('gen_ai.system', 'azure_ai_foundry');
+    span.setAttribute('gen_ai.request.model', turn.model);
+    span.setAttribute('gen_ai.usage.input_tokens', turn.in);
+    span.setAttribute('gen_ai.usage.output_tokens', turn.out);
+    span.setAttribute('gen_ai.usage.cached_tokens', turn.cached);
+    span.end();
+  }
+  return exporter.getFinishedSpans();
 }
-
-// In production this whole block is one line from your vendor's distro:
-//   import { useAzureMonitor } from '@azure/monitor-opentelemetry';
-//   useAzureMonitor();                      // sets the GLOBAL provider; change nothing else below
-const spanExporter = new InMemorySpanExporter();
-const tracerProvider = new BasicTracerProvider({
-  spanProcessors: [new SimpleSpanProcessor(spanExporter)],
-});
-const tracer = tracerProvider.getTracer('cendor-recipe');
 
 reset();
-bus._reset();
-const calls = [];
-bus.subscribe((e) => {
-  if (e instanceof LLMCall) calls.push(e);
+const audit = new AuditLog('foundry_agent', { riskTier: 'limited', signingKey: SIGNING_KEY });
+const spans = emitFoundrySpans();
+
+await track({ feature: 'foundry_agent' }, () => {
+  for (const span of spans) {
+    // Forward the span -> a normalized LLMCall on the bus. `attributes` is already a plain object
+    // here; Python's twin says `dict(span.attributes)` because its SDK hands back a mapping view.
+    otel.ingest({ ...span.attributes });
+  }
 });
+audit.detach();
 
-const client = instrument(fakeFoundry());
-const ask = (text: string) =>
-  client.chat.completions.create({ model: DEPLOYMENT, messages: [{ role: 'user', content: text }] });
+const r = report(['feature']);
+let calls = 0;
+for (const row of r) calls += row.calls; // ReportRow keeps the snake_case wire keys
+console.log(`ingested ${spans.length} Foundry gen_ai.* spans (calls this process never made)`);
+console.log(`tokenguard: $${r.total().amount.toString()} across ${calls} calls`);
 
-// (2) make the deployment priceable, or the USD budget below is a silent no-op.
-prices.registerDeployment(DEPLOYMENT, { like: BASE_MODEL });
-const unit = prices.estimate(DEPLOYMENT, IN_TOKENS, { outputTokens: OUT_TOKENS });
-console.log(`deployment : ${DEPLOYMENT} -> priced like ${BASE_MODEL} ($${unit.amount.toString()}/call)`);
+const evidence = join(mkdtempSync(join(tmpdir(), 'cendor-foundry-ingest-')), 'evidence.jsonl');
+audit.export(evidence, 'eu_ai_act'); // framework is POSITIONAL in TypeScript, not an options object
+const [ok] = verify(evidence, { key: SIGNING_KEY });
+const entries = audit.entries.filter((e) => e.type === 'llm_call').length;
+console.log(`acttrace  : ${entries} llm_call entries, verify: ${ok}`);
 
-const chain = join(mkdtempSync(join(tmpdir(), 'cendor-foundry-otel-')), 'audit.jsonl');
-const audit = new AuditLog('foundry-triage', {
-  riskTier: 'high',
-  path: chain,
-  signingKey: SIGNING_KEY,
-  mirror: new OTelMirror(tracer),
-});
-
-// `outputReserve` is what makes the block PRE-flight. Without it the projection counts input only,
-// the cap is crossed at settlement instead, and a post-flight overspend emits no BudgetEvent — so
-// the refusal would never reach your backend at all.
-const capped = budget({
-  usd: 0.06,
-  onExceed: 'block',
-  outputReserve: OUT_TOKENS,
-  name: 'foundry-triage cap', // a BOUNDED identifier — it becomes a metric attribute
-})(async () => {
-  for (let i = 0; i < 8; i++) await ask(CLAIM);
-});
-
-let blocked = false;
-try {
-  await capped();
-} catch (err) {
-  if (!(err instanceof BudgetExceeded)) throw err;
-  blocked = true;
-} finally {
-  audit.detach();
-}
-
-const spans = spanExporter.getFinishedSpans();
-const spanNames = [...new Set(spans.map((s) => s.name))].sort();
-const budgetSpan = spans.find((s) => s.name === 'audit.budget_event');
-const [ok, detail] = verify(chain, { key: SIGNING_KEY });
-
-console.log(`calls that ran : ${calls.length} (the next was refused pre-flight: ${blocked})`);
-console.log(`spans exported : ${spans.length} — ${spanNames.join(', ')}`);
-console.log(`refusal span   : ${budgetSpan ? budgetSpan.name : 'MISSING'}`);
-console.log(`verify(file)   : ${ok} - ${detail}`);
-console.log('\nAzure Monitor sees these as ordinary spans. Nothing Cendor-specific is exported.');
-
-assert.ok(unit.amount.gt(0), 'registerDeployment() did not make the deployment priceable');
-assert.equal(blocked, true, 'the USD cap never bound — the deployment is still effectively unpriced');
-assert.ok(calls.length > 0 && calls.length < 8, `the cap should bind mid-loop, got ${calls.length}`);
-assert.ok(spans.length > 0, 'the OTelMirror exported no spans at all');
-// The refusal is the whole point of exporting governance: a blocked call makes no provider request,
-// so this span is the ONLY trace of it that ever reaches your backend.
-assert.ok(budgetSpan, `no audit.budget_event span — a refused call left no trace. got: ${spanNames.join(', ')}`);
-assert.equal(ok, true, 'the hash-chained file failed verify()');
+assert.equal(spans.length, FOUNDRY_TURNS.length, 'the stand-in runtime emitted the wrong span count');
+// The whole claim of this recipe: a call the process never made is still budgeted and recorded.
+assert.equal(calls, FOUNDRY_TURNS.length, `every ingested span must reach tokenguard, got ${calls}`);
+assert.ok(r.total().amount.gt(0), 'gpt-4o is priced, so ingested usage must carry a cost');
+assert.equal(entries, FOUNDRY_TURNS.length, `every ingested call must be chained, got ${entries}`);
+assert.equal(ok, true, 'the exported evidence failed verify()');
 
 console.log(
-  '\n⚠️ The FILE is the evidence; the spans are an operational copy. `verify()` runs on the file and ' +
-    'never on the mirror — losing your telemetry backend must not invalidate the record.\n' +
-    '⚠️ A `model-router` deployment is NOT priceable: it bills at the serving model\'s rates while ' +
-    'reporting the router\'s own id, so no single registration is ever correct.',
+  '\n⚠️ `ingest()` trusts the runtime\'s numbers — it normalizes telemetry, it does not measure. ' +
+    'A span with no usage attributes yields a call with `usage: null` and no cost, not a guess.\n' +
+    '⚠️ A Foundry DEPLOYMENT name is unpriced. These spans report `gpt-4o`, a real model id; a span ' +
+    'reporting `prod-gpt4o-eastus` needs `prices.registerDeployment(...)` first or its cost is null.',
 );

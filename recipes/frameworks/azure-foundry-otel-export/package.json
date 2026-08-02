@@ -1,8 +1,8 @@
 {
-  "name": "cendor-recipe-azure-foundry-otel",
+  "name": "cendor-recipe-azure-foundry-otel-export",
   "private": true,
   "type": "module",
-  "description": "Cendor cookbook - budget and audit Microsoft Foundry calls your process never made, via otel.ingest (JS, offline).",
+  "description": "Cendor cookbook - Microsoft Foundry governance exported as OpenTelemetry spans (JS, offline).",
   "engines": {
     "node": ">=20"
   },

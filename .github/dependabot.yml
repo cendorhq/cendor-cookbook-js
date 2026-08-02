@@ -204,6 +204,10 @@ updates:
     schedule: { interval: weekly }
     commit-message: { prefix: chore(deps) }
   - package-ecosystem: npm
+    directory: /recipes/frameworks/azure-foundry-otel-export
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
     directory: /recipes/frameworks/langchain
     schedule: { interval: weekly }
     commit-message: { prefix: chore(deps) }
