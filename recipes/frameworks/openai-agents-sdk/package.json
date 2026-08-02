@@ -10,7 +10,7 @@
     "start": "node index.mjs"
   },
   "dependencies": {
-    "@cendor/core": "^3.6.1",
+    "@cendor/core": "^3.6.2",
     "@cendor/tokenguard": "^3.2.0",
     "@cendor/acttrace": "^3.1.0",
     "@openai/agents": "^0.14.2"

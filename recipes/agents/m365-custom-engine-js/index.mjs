@@ -82,6 +82,42 @@ class Harness {
 /** `channelData.cendor` — what the handler attached, off the wire. */
 const envelopeOf = (reply) => reply?.channelData?.cendor ?? {};
 
+/**
+ * The governance Adaptive Card, off the wire.
+ *
+ * `attachments` is the half a client actually renders. The Playground's chat pane drops
+ * `channelData` and forwards this, which is the whole reason the card exists.
+ */
+const cardOf = (reply) =>
+  (reply?.attachments ?? []).find(
+    (a) => a.contentType === 'application/vnd.microsoft.card.adaptive',
+  )?.content ?? {};
+
+/**
+ * Draw the card as text, so a terminal reader sees what Teams renders. This is a *presentation* of
+ * the same JSON a channel receives — nothing here computes a governance number.
+ */
+function renderCard(card) {
+  const out = [];
+  for (const block of card.body ?? []) {
+    if (block.type === 'Container') {
+      for (const inner of block.items ?? []) out.push(`  ${inner.text ?? ''}`);
+      out.push('');
+    } else if (block.type === 'ColumnSet') {
+      const [left, right] = block.columns;
+      const name = String(left.items[0].text).replaceAll('*', '');
+      const lib = String(left.items[1].text);
+      const lines = String(right.items[0].text).split('\n\n');
+      out.push(`  ${name.padEnd(12)} ${lib.padEnd(11)} ${lines[0]}`);
+      for (const extra of lines.slice(1)) out.push(`  ${''.padEnd(12)} ${''.padEnd(11)} ${extra}`);
+    } else if (block.type === 'TextBlock') {
+      out.push('');
+      out.push(`  ${block.text ?? ''}`);
+    }
+  }
+  return out;
+}
+
 // ═══════════════════════════════════════════════════════════════════ the walkthrough
 
 const h = await new Harness('main').start();
@@ -117,12 +153,17 @@ const [chainOk, chainDetail] = verify(h.auditPath); // read the chain with no se
 const s = await new Harness('stream', { sessionCapUsd: new Decimal('0.00002') }).start();
 let streamed = {};
 let capped = { text: '' };
+let cappedCard = {};
 let streamActivities = 0;
 try {
   streamed = envelopeOf(await s.turn('/stream Tell me everything about refunds', { quiet: 350 }));
   streamActivities = s.stub?.allFor(CONVERSATION).length ?? 0;
   const c = await s.turn('anything else?');
   capped = { ...envelopeOf(c), text: c.text ?? '' };
+  // The same refusal as a card. Kept because it is the NEGATIVE CONTROL for the pre-flight one
+  // below: this refusal genuinely is "the cap is reached", and that one genuinely is not.
+  await s.turn('/cards on');
+  cappedCard = cardOf(await s.turn('and one more?'));
 } finally {
   await s.stop();
 }
@@ -130,11 +171,36 @@ try {
 // 6 — (A) on its own: a cap smaller than the estimate refuses before the model is called
 const p = await new Harness('preflight', { sessionCapUsd: new Decimal('0.000001') }).start();
 let preflightTurn = { text: '' };
+let preflightCard = {};
 try {
   const r = await p.turn('hello');
   preflightTurn = { ...envelopeOf(r), text: r.text ?? '' };
+  // …and the SAME refusal with cards on. This is the one that matters: a refusal with no
+  // explanation reads to a user as "the agent is broken".
+  await p.turn('/cards on');
+  preflightCard = cardOf(await p.turn('hello'));
 } finally {
   await p.stop();
+}
+
+// 7 — the visible half. `/cards on` attaches a governance Adaptive Card to every reply; the numbers
+//     on it are the same ones the envelope carries, rendered for a person instead of a parser. Off
+//     by default: plain text stays the canonical reply.
+const cardsRig = await new Harness('cards').start();
+let cardOk = {};
+let cardOkEnv = {};
+let cardOff = {};
+try {
+  await cardsRig.turn('/cards on');
+  const carded = await cardsRig.turn('I was double charged, can I get a refund?');
+  cardOk = cardOf(carded);
+  // …and the SAME reply's envelope, so a test can assert the card is not a second, parallel
+  // computation of the same facts. One turn, two renderings.
+  cardOkEnv = envelopeOf(carded);
+  await cardsRig.turn('/cards off');
+  cardOff = cardOf(await cardsRig.turn('and my other order?'));
+} finally {
+  await cardsRig.stop();
 }
 
 // ═══════════════════════════════════════════════════════════════════ the afterTurn trap, proven
@@ -205,6 +271,13 @@ console.log(`  mid-stream  : ${streamed.governance} after ${streamActivities} ch
 console.log(`  session cap : ${capped.governance} -> ${JSON.stringify(capped.text)}`);
 console.log(`  pre-flight  : ${preflightTurn.governance} -> ${JSON.stringify(preflightTurn.text)}`);
 console.log(`  audit chain : verify=${chainOk} — ${chainDetail}`);
+console.log('--- what the USER sees (/cards on) ------------------------------');
+for (const line of renderCard(cardOk)) console.log(line);
+console.log('\n--- ...and when governance refuses ------------------------------');
+for (const line of renderCard(preflightCard)) console.log(line);
+console.log(
+  `\n  /cards off  : attachments back to ${Object.keys(cardOff).length} — plain text is canonical`,
+);
 console.log('--- the afterTurn trap, measured -------------------------------');
 console.log(`  with  app.onTurn('afterTurn') : $${withHandler} cumulative after 2 turns`);
 console.log(`  without it (the quickstart)   : $${withoutHandler} — one turn's worth, every turn`);
@@ -257,3 +330,46 @@ assert.ok(
 assert.ok(new Decimal(withoutHandler).greaterThan(0), 'the per-turn cost itself is unaffected');
 
 console.log('\nall assertions passed');
+
+// ── the governance card: it must SAY something, not merely render ────────────────────────────────
+//
+// ⚠️ These assert content, not shape. A card that renders and says nothing is the failure worth
+// guarding: the whole reason it exists is that `channelData` was invisible in the chat pane.
+assert.equal(cardOk.type, 'AdaptiveCard');
+assert.equal(cardOk.version, '1.5', '1.5 keeps Playground + Teams + WebChat all rendering it');
+const cardText = JSON.stringify(cardOk);
+for (const lib of ['core', 'tokenguard', 'contextkit', 'guardrails', 'acttrace']) {
+  assert.ok(cardText.includes(lib), `${lib} did work on this turn and the card does not say so`);
+}
+// …and the numbers are the SAME TURN's envelope values, not a second computation of them.
+// ⚠️ Compare against `cardOkEnv` (that reply's own envelope), never another turn's: the
+// deterministic fake makes two turns' costs equal, so a cross-turn assertion passes for the wrong
+// reason. The trace id is what catches it — it is unique per turn.
+assert.ok(
+  cardText.includes(String(cardOkEnv.cost_usd)),
+  "the card's money must be the turn's real cost",
+);
+assert.ok(cardText.includes(String(cardOkEnv.trace_id)), 'the card must describe THIS turn');
+assert.ok(
+  cardText.includes('rate ') &&
+    (cardText.includes('as of') || cardText.includes('outranks every table')),
+);
+
+// a refusal must EXPLAIN itself. "the agent hit an error" is the failure this replaces.
+const refusal = JSON.stringify(preflightCard);
+assert.ok(refusal.includes('refused before the call'));
+assert.ok(refusal.includes('Zero provider calls, $0 spent'));
+// ⚠️ It must not claim the CAP was reached — the estimate over-reserves, so it can refuse while the
+// ledger still shows headroom. Match the CLAIM, not the word: a bare `!includes('reached')` fails
+// on the card's own honest line "nothing reached the provider". A substring is not a claim.
+for (const lie of ['cap reached', 'reached your cap', 'reached its cap']) {
+  assert.ok(!refusal.toLowerCase().includes(lie), `a pre-flight refusal must not say "${lie}"`);
+}
+// …and the NEGATIVE CONTROL: the session-cap refusal is a genuinely different event, and it does
+// say so. Without this the assertion above would pass on a card that had stopped explaining at all.
+const cappedText = JSON.stringify(cappedCard).toLowerCase();
+assert.ok(cappedText.includes('session cap reached'));
+assert.ok(cappedText.includes('no model call was made'));
+
+// off by default, and the toggle really turns it off: governance never depends on styling
+assert.deepEqual(cardOff, {}, '/cards off must stop attaching the card');

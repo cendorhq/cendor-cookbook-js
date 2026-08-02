@@ -1,8 +1,8 @@
 {
-  "name": "cendor-recipe-tokenguard",
+  "name": "cendor-recipe-prices-live-and-explain",
   "private": true,
   "type": "module",
-  "description": "Cendor cookbook - stop a runaway agent loop before it overspends (JS, offline).",
+  "description": "Cendor cookbook - prices.explain(), save/load, refresh(required) and StalePriceTableWarning (JS, offline).",
   "engines": {
     "node": ">=20"
   },

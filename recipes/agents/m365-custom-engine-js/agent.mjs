@@ -26,6 +26,7 @@
  * local posture and an **open relay in production**. See the README's "Before you deploy this" box.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { readFileSync } from 'node:fs';
 import express from 'express';
 import { Decimal } from 'decimal.js';
 import {
@@ -80,6 +81,32 @@ let CAP_PARAM =
 // governance numbers are all correct; there is simply no text. Raise the cap for a reasoning
 // deployment, or keep the demo cap and expect an empty answer.
 const CONTEXT_BUDGET_TOKENS = 1200;
+
+// ⚠️ TRAP — **an unpriced model turns every USD guard in this file into a silent no-op, and the
+// agent still exits 0.** An Azure deployment name is arbitrary (`prod-chat`, `gpt-5-mini`, …) and
+// carries no rate card, so tokenguard counts its calls as $0. Measured 2026-07-31 against the
+// `gpt-5-mini` deployment the Azure swap points at: every governed turn reported `cost: $0`, and
+// the session cap, the pre-flight refusal AND the mid-stream breaker all printed `ok` while doing
+// nothing at all — five passing governance demos that were five no-ops. Worse than a crash,
+// because nothing tells you.
+//
+// So price the deployment by naming the model behind it (`@cendor/core` >= 3.2), exactly as
+// `providers/azure-foundry` does, and refuse to run unpriced rather than pretend.
+const BASE_MODEL = process.env.AZURE_BASE_MODEL ?? 'gpt-4o-mini';
+
+/**
+ * Give `MODEL` a rate card if it has none. Returns true if a registration was needed.
+ *
+ * A plain OpenAI model name (`gpt-4o-mini`) is already priced and this is a no-op. An Azure
+ * deployment name is not, and without this every dollar figure in this file is $0.
+ * `registerDeployment` **throws** on a `like` cendor does not know, which is the point: an unknown
+ * base model must be a loud failure at startup, not a quiet $0 on every turn.
+ */
+export function priceTheDeployment() {
+  if (prices.models().includes(MODEL)) return false;
+  prices.registerDeployment(MODEL, { like: BASE_MODEL });
+  return true;
+}
 
 // TurnState in the JS port is a **property proxy** (`state.conversation.foo = …`), not Python's
 // dotted-path string. Same conversation scope, different ergonomics.
@@ -276,6 +303,7 @@ async function assemblePrompt(history, userText) {
   });
   ctx.add(new Block(INSTRUCTIONS, { role: 'system', priority: 100, pin: true }));
 
+  let squeezedPct;
   if (history.length) {
     const blob = history.map((m) => `${m.role}: ${m.content}`).join('\n');
     if (blob.length > 1200) {
@@ -283,12 +311,16 @@ async function assemblePrompt(history, userText) {
       ctx.add(
         new Block(`Earlier conversation (compressed):\n${text}`, { role: 'system', priority: 50 }),
       );
+      // Token-for-token, not character-for-character — the budget is in tokens, so a character
+      // ratio would be a different (and flattering) number.
+      const before = tokens.count(blob, MODEL);
+      if (before) squeezedPct = Math.round((1 - tokens.count(text, MODEL) / before) * 100);
     } else {
       ctx.add(new Block({ messages: history, priority: 50, evict: 'drop_oldest' }));
     }
   }
   ctx.add(new Block(userText, { role: 'user', priority: 90, pin: true }));
-  return await ctx.assemble();
+  return { messages: await ctx.assemble(), squeezedPct };
 }
 // ────────────────── (C) the per-conversation cap, held in the host's own TurnState
 //
@@ -370,16 +402,22 @@ function turnBudget(allowance, { conversationId, stream = false }, cb) {
  * refusal — let the real budget scope do the work.
  */
 function preflight(messages, allowance) {
+  const amount = estimateFor(messages);
+  if (amount === undefined) return true;
+  return amount.lte(0) ? true : amount.lte(allowance);
+}
+
+/** The same projection `preflight()` compares, as a number — so the card can SHOW what it refused
+ *  on. A refusal that does not name its own number is indistinguishable from a bug. */
+function estimateFor(messages) {
   try {
     const text = messages.map((m) => String(m.content ?? '')).join('\n');
     const est = prices.estimate(MODEL, tokens.count(text, MODEL), {
       outputTokens: MAX_OUTPUT_TOKENS,
     });
-    if (!est) return true;
-    const amount = new Decimal(est.amount.toString());
-    return amount.lte(0) ? true : amount.lte(allowance);
+    return est ? new Decimal(est.amount.toString()) : undefined;
   } catch {
-    return true;
+    return undefined;
   }
 }
 // ─────────────────── the reply envelope, attached in the handler
@@ -399,16 +437,230 @@ function channelDataFor(envelope) {
   return { cendor: payload };
 }
 
+// ─────────────────── the governance card, the part a USER sees
+//
+// The envelope above is for machines. This is for the person in the chat.
+//
+// ⚠️ WHY A CARD AND NOT `channelData`: measured against M365 Agents Playground 0.2.28 — its UI
+// projection (`convertMessage()`) forwards a fixed field set and reads `channelData` only for
+// `feedbackLoopEnabled`, so the envelope is on the wire and **invisible in the chat pane**. It does
+// survive in the Log Panel's raw Activity JSON. `attachments`, by contrast, ARE forwarded and
+// rendered. So a card is the only way to actually *see* what the libraries did while sitting in
+// front of the Playground — or in Teams, or WebChat.
+//
+// The shape is deliberately the one cendor.ai/try uses: **one row per library, saying what that
+// library did on this turn, in words.** A FactSet of raw keys is a JSON dump with better spacing;
+// what a reviewer needs to read is "tokenguard refused this before any call, and here is the number
+// it refused on". So the card leads with a sentence and then attributes each fact to the tool that
+// produced it.
+//
+// Opt-in, off by default (`M365_CARDS=1`, or `/cards on` in the chat): plain text stays the
+// canonical reply, because a card is channel styling and governance must not depend on styling.
+
+const CARDS_DEFAULT = process.env.M365_CARDS === '1';
+/** Everything the card shows, collected by the handler as the turn happens. */
+
+export function newTurnFacts(over = {}) {
+  return {
+    governance: 'ok',
+    inputTokens: 0,
+    outputTokens: 0,
+    modelCalls: 0,
+    assembledMessages: 0,
+    contextBudgetTokens: CONTEXT_BUDGET_TOKENS,
+    decisions: [],
+    policyCategories: [],
+    ...over,
+  };
+}
+
+/** `[container style, headline]` per governance outcome — Adaptive Card 1.5's own styles, so each
+ *  client renders them in ITS theme rather than in ours. */
+const STATUS = {
+  ok: ['good', '✅  governed · answered'],
+  input_blocked: ['attention', '🛑  guardrails · input blocked'],
+  output_blocked: ['attention', '🛑  guardrails · output blocked'],
+  policy_blocked: ['attention', '🛑  acttrace · data policy blocked'],
+  broke_on_budget: ['warning', '✂️  tokenguard · stopped mid-stream'],
+  preflight_refused: ['warning', '⛔  tokenguard · refused before the call'],
+  session_cap_reached: ['warning', '⛔  tokenguard · session cap reached'],
+};
+
+const usd = (v) => (v === undefined ? '—' : `$${v.toString()}`);
+
 /**
- * Plain text plus the envelope — the whole of it.
+ * One sentence: what happened to this turn, and why. The part people actually read.
+ *
+ * ⚠️ Two of these are worded the way they are because the alternative is a lie. A pre-flight refusal
+ * is **not** "you hit your cap" — the estimate over-reserves the full output allowance (measured
+ * 3.04x on one real turn), so it can refuse while the ledger still shows headroom. And an output
+ * block is **still billed**: the tokens were spent before the gate saw them.
+ */
+function narration(f) {
+  if (f.governance === 'session_cap_reached') {
+    return `This conversation has spent ${usd(f.sessionSpentUsd)} of its ${usd(f.sessionCapUsd)} cap, so no model call was made. Nothing was billed.`;
+  }
+  if (f.governance === 'preflight_refused') {
+    return `Refused before any model call: the estimate was ${usd(f.estimateUsd)} against ${usd(f.turnAllowanceUsd)} left for this turn. Zero provider calls, $0 spent. The estimate reserves the full output allowance, so this can refuse while the session ledger still shows headroom.`;
+  }
+  if (f.governance === 'input_blocked') {
+    const names = [
+      ...new Set(f.decisions.filter((d) => d.action === 'block').map((d) => d.guardrail)),
+    ]
+      .sort()
+      .join(', ');
+    return `Blocked on the way in by ${names || 'a guardrail'} — before the request was built, so the model never saw it and nothing was billed. The block is in the audit chain.`;
+  }
+  if (f.governance === 'policy_blocked') {
+    return `The data policy stopped this inside the provider call (${f.policyCategories.join(', ') || 'a policy category'}) — no tokens left the process. The finding's categories are reported; the matched value never is.`;
+  }
+  if (f.governance === 'output_blocked') {
+    return `The model answered and the output gate refused to send it. ⚠️ This turn is still billed ${usd(f.costUsd)} — the tokens were spent before the gate could see them.`;
+  }
+  if (f.governance === 'broke_on_budget') {
+    return `The stream was cut at the chunk where this turn's ${usd(f.turnAllowanceUsd)} allowance ran out. Spend stops at that boundary; whatever the channel had already been sent stays on screen.`;
+  }
+  return `Answered in ${f.modelCalls} model call${f.modelCalls === 1 ? '' : 's'} for ${usd(f.costUsd)}. This conversation has used ${usd(f.sessionSpentUsd)} of ${usd(f.sessionCapUsd)}.`;
+}
+
+/** One library's row: what it is on the left, what it DID on the right. */
+function row(name, lib, lines) {
+  const text = lines.filter(Boolean).join('\n\n');
+  if (!text) return null;
+  return {
+    type: 'ColumnSet',
+    separator: true,
+    spacing: 'Small',
+    columns: [
+      {
+        type: 'Column',
+        width: '108px',
+        items: [
+          { type: 'TextBlock', text: `**${name}**`, wrap: true, size: 'Small' },
+          {
+            type: 'TextBlock',
+            text: lib,
+            wrap: true,
+            size: 'Small',
+            isSubtle: true,
+            spacing: 'None',
+          },
+        ],
+      },
+      {
+        type: 'Column',
+        width: 'stretch',
+        items: [{ type: 'TextBlock', text, wrap: true, size: 'Small' }],
+      },
+    ],
+  };
+}
+
+/**
+ * An Adaptive Card 1.5 that says **which library did what** on this turn, in words.
+ *
+ * 1.5 rather than anything newer on purpose: the Playground, Teams and WebChat all render it.
+ */
+export function governanceCard(f) {
+  const [style, headline] = STATUS[f.governance] ?? ['accent', f.governance];
+
+  const coreLines = f.modelCalls
+    ? [
+        `detected **${f.provider ?? '?'} · ${f.model}** from the client's shape`,
+        `${f.inputTokens.toLocaleString('en-US')} in / ${f.outputTokens.toLocaleString('en-US')} out — the provider's count`,
+      ]
+    : ['**no model call was made** — nothing reached the provider'];
+  if (f.traceId) coreLines.push(`one trace id for the turn: \`${f.traceId}\``);
+
+  const budgetLines = [];
+  if (f.costUsd !== undefined)
+    budgetLines.push(`this turn **${usd(f.costUsd)}** (decimal.js, never a JS number)`);
+  if (f.sessionSpentUsd !== undefined && f.sessionCapUsd !== undefined) {
+    budgetLines.push(
+      `session ${usd(f.sessionSpentUsd)} of ${usd(f.sessionCapUsd)}, held in the host's own TurnState`,
+    );
+  }
+  if (f.turnAllowanceUsd !== undefined)
+    budgetLines.push(`this turn's fuse: ${usd(f.turnAllowanceUsd)} (the remainder)`);
+  // ⚠️ The provenance line, not a decoration. A USD cap is only as good as the rate under it, and an
+  // unpriced model makes every dollar guard in this file a silent no-op.
+  if (f.rateFrom) budgetLines.push(`rate ${f.rateFrom}`);
+
+  const ctxLines = f.assembledMessages
+    ? [
+        `packed ${f.assembledMessages} message(s) into a ${f.contextBudgetTokens.toLocaleString('en-US')}-token window`,
+      ]
+    : [];
+  const sqLines =
+    f.squeezedPct === undefined
+      ? []
+      : [`history compressed **${f.squeezedPct}%** — reversible, not summarised`];
+
+  const gateLines = f.decisions.map((d) => `\`${d.guardrail}\` → **${d.action}**`);
+  if (!gateLines.length && f.governance !== 'policy_blocked')
+    gateLines.push('in and out: nothing to act on');
+
+  const auditLines = [];
+  if (f.policyCategories.length)
+    auditLines.push(`data policy stopped: ${f.policyCategories.join(', ')}`);
+  if (f.auditEntries !== undefined) auditLines.push(`${f.auditEntries} hash-chained entries`);
+  if (f.auditHead)
+    auditLines.push(`head \`${f.auditHead.slice(0, 16)}…\` — \`verify()\` re-walks the file`);
+
+  const body = [
+    {
+      type: 'Container',
+      style,
+      bleed: true,
+      items: [
+        { type: 'TextBlock', text: headline, weight: 'Bolder', wrap: true },
+        { type: 'TextBlock', text: narration(f), wrap: true, spacing: 'Small' },
+      ],
+    },
+  ];
+  for (const r of [
+    row('Bus feed', 'core', coreLines),
+    row('Budget', 'tokenguard', budgetLines),
+    row('Receipt', 'contextkit', ctxLines),
+    row('Compression', 'squeeze', sqLines),
+    row('Gate', 'guardrails', gateLines),
+    row('Audit', 'acttrace', auditLines),
+  ]) {
+    if (r) body.push(r);
+  }
+  body.push({
+    type: 'TextBlock',
+    text: '_Every number above came from the published cendor packages reading this turn — not from the app. Replay it from a cassette and this card is identical._',
+    wrap: true,
+    isSubtle: true,
+    size: 'Small',
+    separator: true,
+    spacing: 'Medium',
+  });
+  return {
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    type: 'AdaptiveCard',
+    version: '1.5',
+    body,
+  };
+}
+
+/**
+ * Plain text, the machine envelope, and — when asked — the card a human reads.
  *
  * `channelData.cendor` is for the channel / your back end to consume. Whether a *client* surfaces it
  * is client-specific: the M365 Agents Playground projects `channelData` away in its UI (it is still
- * on the wire), so don't tell people to look for it there — assert it in a test, or log it.
+ * on the wire), so don't tell people to look for it there — assert it in a test, or log it. The card
+ * is the visible half, and it goes in `attachments`, which every one of those clients does forward.
  */
-async function reply(context, text, envelope) {
+async function reply(context, text, envelope, facts, cards = false) {
   const activity = Activity.fromObject({ type: ActivityTypes.Message, text });
   activity.channelData = { ...(activity.channelData ?? {}), ...channelDataFor(envelope) };
+  if (cards && facts) {
+    activity.attachments = [
+      { contentType: 'application/vnd.microsoft.card.adaptive', content: governanceCard(facts) },
+    ];
+  }
   await context.sendActivity(activity);
 }
 // ═══════════════════════════════════════════════════════════════════ the agent
@@ -428,6 +680,12 @@ export class GovernedAgent {
   audit;
   interceptor;
   app;
+  auditPath;
+  /** Flipped by `/cards on|off`. Off unless `M365_CARDS=1` — plain text stays the canonical reply,
+   *  so governance never depends on a channel rendering a card. */
+  cards = CARDS_DEFAULT;
+  /** True when `MODEL` had no rate card and one was registered for it at startup. */
+  pricedDeployment;
 
   constructor({
     auditPath,
@@ -435,6 +693,11 @@ export class GovernedAgent {
     sessionCapUsd = SESSION_CAP_USD,
     skipAfterTurnHandler = false,
   } = {}) {
+    this.auditPath = auditPath;
+    // Price MODEL FIRST. Every USD guard below — the turn cap, the session cap, the pre-flight
+    // projection, the mid-stream breaker — reads $0 for an unpriced model and enforces nothing,
+    // silently. Do this before anything that can spend. See `priceTheDeployment()`.
+    this.pricedDeployment = priceTheDeployment();
     this.client = makeClient();
     this.inGate = inputGate();
     this.outGate = outputGate();
@@ -464,21 +727,78 @@ export class GovernedAgent {
     removeAmbientProvider(this.ambient);
   }
 
+  /**
+   * One phrase saying where `MODEL`'s per-token rate came from (`@cendor/core` >= 3.6).
+   *
+   * Three answers, and the third is the one that costs money if nobody notices it:
+   * **registered** (your line, outranks every table) · **from a source as of a date** (the bundled
+   * snapshot, generated from the cendor-prices feed with per-row provenance, or whatever
+   * `refresh()` you called at startup) · **unpriced**, where tokenguard counts every call as $0 and
+   * the USD cap, the pre-flight refusal and the mid-stream breaker are all silent no-ops.
+   */
+  rateProvenance() {
+    const e = prices.explain(MODEL);
+    if (e.registered)
+      return `registered here as \`${BASE_MODEL}\` — your line, outranks every table`;
+    if (e.how === 'unpriced')
+      return '**UNPRICED — every USD guard on this turn is a silent no-op**';
+    return `from **${e.rowSource ?? e.sourceName}** as of ${e.rowAsof ?? e.snapshotDate}`;
+  }
+
+  /**
+   * Stamp the audit chain's state and the price provenance onto `facts` at reply time.
+   *
+   * Read at reply time, not at turn start, because the entries this turn wrote are the whole point.
+   * The head comes from the live `AuditLog`; the count is the chain FILE's line count — the file is
+   * the evidence, and asking it is how you notice a writer that stopped writing.
+   */
+  turnFacts(facts) {
+    facts.rateFrom = this.rateProvenance();
+    facts.auditHead = this.audit.head ?? undefined;
+    try {
+      facts.auditEntries = this.auditPath
+        ? readFileSync(this.auditPath, 'utf8')
+            .split('\n')
+            .filter((l) => l.trim()).length
+        : undefined;
+    } catch {
+      facts.auditEntries = undefined; // no chain file yet — an answer, not an error
+    }
+    return facts;
+  }
+
   register() {
     this.app.onActivity(ActivityTypes.Message, async (context, state) => {
       // `DefaultConversationState` carries no index signature; the ledger addresses its own
       // namespaced property, so the state is viewed through the structural type above.
       const turnState = state;
       let text = (context.activity.text ?? '').trim();
+
+      // `/cards on|off` — the visible-governance toggle. It costs nothing and calls nothing, so it
+      // answers before the ledger is even read.
+      if (text.toLowerCase() === '/cards on' || text.toLowerCase() === '/cards off') {
+        this.cards = text.toLowerCase().endsWith('on');
+        await context.sendActivity(
+          Activity.fromObject({
+            type: ActivityTypes.Message,
+            text: `Governance cards ${this.cards ? 'on' : 'off'}.`,
+          }),
+        );
+        return;
+      }
+
       const streamed = text.startsWith('/stream ');
       if (streamed) text = text.slice('/stream '.length);
       const cid = context.activity.conversation?.id ?? '';
       const ledger = new SpendLedger(turnState, this.sessionCapUsd);
+      const facts = newTurnFacts({ model: MODEL, sessionCapUsd: ledger.capUsd });
 
       // (D) every bus event raised below carries this turn's identity and one trace id
       await turnScope(context, async () => {
         // (C) the cheapest refusal there is: the cap is gone, so no model call happens
         if (ledger.exhausted) {
+          facts.governance = 'session_cap_reached';
+          facts.sessionSpentUsd = ledger.spent;
           await reply(
             context,
             "This conversation has used its budget, so I didn't call the model.",
@@ -487,6 +807,8 @@ export class GovernedAgent {
               session_spent_usd: ledger.spent.toString(),
               session_cap_usd: ledger.capUsd.toString(),
             },
+            this.turnFacts(facts),
+            this.cards,
           );
           return;
         }
@@ -498,23 +820,40 @@ export class GovernedAgent {
             action: 'blocked',
             severity: 'warning',
           });
-          await reply(context, "I can't process that message.", {
-            governance: 'input_blocked',
-            decisions: inGated.decisions.map((d) => `${d.guardrail}:${d.action}`),
-            session_spent_usd: ledger.spent.toString(),
-          });
+          facts.governance = 'input_blocked';
+          facts.decisions = [...inGated.decisions];
+          facts.sessionSpentUsd = ledger.spent;
+          await reply(
+            context,
+            "I can't process that message.",
+            {
+              governance: 'input_blocked',
+              decisions: inGated.decisions.map((d) => `${d.guardrail}:${d.action}`),
+              session_spent_usd: ledger.spent.toString(),
+            },
+            this.turnFacts(facts),
+            this.cards,
+          );
           return;
         }
 
         const history = turnState.conversation[HISTORY_PROP] ?? [];
-        const messages = await assemblePrompt(history, String(inGated.payload));
+        const assembly = await assemblePrompt(history, String(inGated.payload));
+        const messages = assembly.messages;
         const allowance = ledger.turnAllowance();
+        facts.assembledMessages = messages.length;
+        facts.squeezedPct = assembly.squeezedPct;
+        facts.turnAllowanceUsd = allowance;
+        facts.sessionSpentUsd = ledger.spent;
+        facts.decisions = [...inGated.decisions];
 
         // (A) is skipped on a streamed turn, on purpose. ⚠️ (A) and (E) are MUTUALLY EXCLUSIVE: the
         // estimate reserves the full `maxOutputTokens`, so any allowance small enough for the breaker
         // to fire is already below the estimate — the turn would be refused before a chunk existed.
         // A stream's fuse IS the breaker.
         if (!streamed && !preflight(messages, allowance)) {
+          facts.governance = 'preflight_refused';
+          facts.estimateUsd = estimateFor(messages);
           await reply(
             context,
             "That request would exceed what's left of this conversation's budget.",
@@ -523,6 +862,8 @@ export class GovernedAgent {
               session_spent_usd: ledger.spent.toString(),
               session_cap_usd: ledger.capUsd.toString(),
             },
+            this.turnFacts(facts),
+            this.cards,
           );
           return;
         }
@@ -553,11 +894,15 @@ export class GovernedAgent {
           // "the agent hit an error" instead of the refusal. Report categories, never the value.
           if (!(err instanceof PolicyViolation)) throw err;
           const categories = [...new Set((err.findings ?? []).map((f) => f.category))].sort();
+          facts.governance = 'policy_blocked';
+          facts.policyCategories = categories;
           await reply(
             context,
             "I can't send that to the model — our data policy blocked it" +
               (categories.length ? ` (${categories.join(', ')}).` : '.'),
             { governance: 'policy_blocked', decisions: categories.map((c) => `acttrace:${c}`) },
+            this.turnFacts(facts),
+            this.cards,
           );
           return;
         } finally {
@@ -599,8 +944,23 @@ export class GovernedAgent {
             (d) => `${d.guardrail}:${d.action}`,
           ),
         };
+        facts.governance = envelope.governance;
+        facts.provider = calls.length ? calls[calls.length - 1].provider : undefined;
+        facts.traceId = envelope.trace_id;
+        facts.costUsd = new Decimal(cost.amount.toString());
+        facts.inputTokens = usageIn;
+        facts.outputTokens = usageOut;
+        facts.modelCalls = calls.length;
+        facts.sessionSpentUsd = total;
+        facts.decisions = [...inGated.decisions, ...outGated.decisions];
         // A streamed turn already flushed its text, so the envelope rides a final activity.
-        await reply(context, streamed ? '' : String(safeAnswer), envelope);
+        await reply(
+          context,
+          streamed ? '' : String(safeAnswer),
+          envelope,
+          this.turnFacts(facts),
+          this.cards,
+        );
       });
     });
   }

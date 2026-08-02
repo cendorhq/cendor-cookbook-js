@@ -58,6 +58,11 @@ import { BudgetExceeded, budget, report, reset } from '@cendor/tokenguard';
 
 const SIGNING_KEY = process.env.CENDOR_DEMO_KEY ?? 'demo-signing-key';
 const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'eu.amazon.nova-2-lite-v1:0';
+/** A CURRENT Bedrock Claude id. Unlike MODEL_ID it prices with no registration at all, because the
+ *  lookup strips the region prefix, the vendor prefix and `-v1:0` down to a base the table knows. */
+const PRICED_ID = 'eu.anthropic.claude-sonnet-4-6-v1:0';
+/** `refresh({ source: 'aws' })` is per region, like Amazon's own price files. */
+const AWS_REGION = process.env.AWS_REGION ?? 'us-east-1';
 const IN_TOKENS = 4_000;
 const OUT_TOKENS = 700;
 
@@ -192,6 +197,44 @@ async function offlineDemo() {
     console.log(`            and a USD cap now binds too — ${err.constructor.name}`);
   }
   const usdRun = report().rows.reduce((n, row) => n + row.calls, 0);
+
+  // (3c) SHOW where each rate came from. `prices.explain(id)` is the difference between "the cost
+  // is 0.0001428" and "the cost is 0.0001428 because I typed that rate in". Two different answers
+  // on the same table, which is the whole Bedrock pricing story.
+  const mine = prices.explain(MODEL_ID);
+  const theirs = prices.explain(PRICED_ID);
+  console.log(`explain   : ${mine.summary()}`);
+  console.log(`            how=${JSON.stringify(mine.how)} registered=${mine.registered}  <- YOUR line, not a table`);
+  console.log(`explain   : ${theirs.summary()}`);
+  console.log(`            how=${JSON.stringify(theirs.how)} registered=${theirs.registered}  <- normalized, no code`);
+
+  // (3d) You may not have to type Amazon's rate card in at all. `refresh({ source: 'aws' })` reads
+  // **Amazon's own** Bedrock price files: a static, public JSON document that needs NO AWS
+  // credentials — you are pricing a model, not calling one. Keyless, so this is a LIVE=1 section
+  // rather than a RECORD=1 one: nothing to record, no key to leak.
+  //
+  // ⚠️ TWO THINGS THAT LOOK LIKE FAILURES AND ARE NOT, both printed below:
+  //  (a) refresh({ source }) REPLACES the table; it does not merge into it. A first-party catalog
+  //      is authoritative AND narrow, so a model the bundled snapshot priced can come back
+  //      UNPRICED. That is the trade, stated: a bare refresh() (the cendor-prices feed) is the one
+  //      that reconciles first-party catalogs with the aggregators, and it is the default for
+  //      exactly this reason.
+  //  (b) MODEL_ID stays registered. A registration outranks every table forever — the precedence
+  //      contract working, not the fetch failing.
+  if (process.env.LIVE === '1') {
+    const beforeRows = prices.models().length;
+    const was = prices.explain(PRICED_ID).how;
+    const fetched = await prices.refresh(undefined, { source: 'aws', region: AWS_REGION });
+    console.log(`aws       : refresh({ source: 'aws', region: '${AWS_REGION}' }) -> ${fetched}, ${beforeRows} rows -> ${prices.models().length}, as of ${prices.snapshotDate()}   (no AWS credentials)`);
+    console.log(`            confirms : ${prices.explain('us.amazon.nova-lite-v1:0').summary()}`);
+    console.log('                       == the input: 0.06 / output: 0.24 per 1M typed in above');
+    console.log(`            REPLACED : ${PRICED_ID} was ${JSON.stringify(was)}, is now ${JSON.stringify(prices.explain(PRICED_ID).how)}`);
+    console.log('                       a first-party catalog is authoritative AND narrow; the bare');
+    console.log('                       refresh() feed is the one that reconciles them');
+    console.log(`            yours    : ${MODEL_ID} still registered=${prices.explain(MODEL_ID).registered}`);
+  } else {
+    console.log("aws       : set LIVE=1 to price Bedrock ids from Amazon's own public price files (keyless): prices.refresh(undefined, { source: 'aws', region })");
+  }
 
   // (4) record
   const before = providerCalls.n;

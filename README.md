@@ -61,6 +61,7 @@ There is **no workspace and no root install**. Every recipe is a self-contained 
 | [cassette-semantic-drift](recipes/libs/cassette-semantic-drift/) | library | Measured: a surface scorer keeps the paraphrase and drops the real change. **Carries the one Python-only omission** | `core` `cassette` | ✓ |
 | [acttrace-custom-detector](recipes/libs/acttrace-custom-detector/) | library | `registerDetector()` with a validator + `enableLocalePack()`; 1 of 5 found before, 5 after | `acttrace` | ✓ |
 | [core-seams](recipes/libs/core-seams/) | library | `trace()` (a **callback** here), `addStreamObserver()` and `tokens.register()` | `core` | ✓ |
+| [prices-live-and-explain](recipes/libs/prices-live-and-explain/) | library | `prices.explain()` — which source priced this call, as of when; plus `save`/`load`, `refresh({ required })` and the stale-table warning (delivered, not filtered) | `core` `tokenguard` | ✓ |
 | [acttrace](recipes/quickstarts/acttrace/) | quickstart | A hash-chained record; one flipped byte breaks `verify()` at a named sequence number | `acttrace` | ✓ |
 | [cassette](recipes/quickstarts/cassette/) | quickstart | Record once, replay forever — **1 provider call then 0**, which is the whole claim | `core` `cassette` | ✓ |
 | [contextkit](recipes/quickstarts/contextkit/) | quickstart | Priority-packed assembly with a receipt; pinned blocks survive, the docs blob truncates | `contextkit` | ✓ |

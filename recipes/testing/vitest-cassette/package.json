@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@cendor/cassette": "^3.0.0",
-    "@cendor/core": "^3.6.1",
+    "@cendor/core": "^3.6.2",
     "vitest": "^4.1.10"
   }
 }

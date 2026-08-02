@@ -92,6 +92,10 @@ updates:
     schedule: { interval: weekly }
     commit-message: { prefix: chore(deps) }
   - package-ecosystem: npm
+    directory: /recipes/libs/prices-live-and-explain
+    schedule: { interval: weekly }
+    commit-message: { prefix: chore(deps) }
+  - package-ecosystem: npm
     directory: /recipes/quickstarts/acttrace
     schedule: { interval: weekly }
     commit-message: { prefix: chore(deps) }
