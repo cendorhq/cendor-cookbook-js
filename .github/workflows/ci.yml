@@ -113,6 +113,11 @@ jobs:
       # does not exist, AND an undocumented one that does.
       - run: node scripts/check-live-switches.mjs --self-test
       - run: node scripts/check-live-switches.mjs
+      # The README's recipe TABLE is gated (by the site's card check, against both trees); the
+      # SENTENCE stating the total was not, and on 2026-08-03 it was a number behind — 52 stated
+      # against 53 on disk, with the table itself complete and correct. Prose rots silently because
+      # no gate reads prose. The Python twin had the identical defect, one number further behind.
+      - run: node scripts/check-readme-count.mjs
       # The sync gate's own negative control. It runs here rather than in a shard because it needs
       # no recipe deps — and because a gate whose self-test never runs is a gate nobody has checked.
       - name: install tooling

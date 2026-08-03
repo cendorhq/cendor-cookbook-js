@@ -93,6 +93,20 @@ name. It is documented in [`README.md`](README.md); do not "close the gap".
    parity matrix (`cendor-libs-js/docs/parity.md`) is the contract. See the parity notes in
    [`README.md`](README.md).
 
+## The README's total is gated (2026-08-03)
+
+`scripts/check-readme-count.mjs` asserts the *"**N recipes across M categories**"* sentence against
+the filesystem, with a proven negative control each way. The recipe **table** was already gated (by
+`cendor-site/scripts/check-recipe-cards.mjs`, across both trees); the **sentence** was not, and on
+2026-08-03 it said 52 against 53 on disk while the table listed all 53. Prose rots silently because
+no gate reads prose. ⚠️ It normalizes CRLF first — a newline-anchored pattern matches **nothing** on
+these checkouts, which is how the sibling card gate passed vacuously on its first run.
+
+The Python twin (`check_readme_counts.py`) additionally checks a parity sentence and a notebook
+count, which only exist over there — and carries a second gate this repo does not need, because
+Node always writes UTF-8: `check_print_encoding.py`, for a `⚠️` in a `print()` that kills a Python
+recipe on a Windows console.
+
 ## Versioning — the org standard (see the workspace `CLAUDE.md`)
 
 1. **A MAJOR bump needs Raghav's explicit approval. Never autonomous.** Propose it, say what breaks,
