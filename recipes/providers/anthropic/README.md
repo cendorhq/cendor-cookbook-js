@@ -65,10 +65,11 @@ In the JS SDK they are *helpers built on* `create`, so a target there double-cou
 ## Honest limits
 
 ⚠️ **Token counting for Claude is approximate BEFORE the call.** `o200k` under-counts Claude by a
-measured **1.49×** on English and **1.14×** on code, and no scaling factor is applied — a guessed
-correction would be a different kind of wrong. So a *pre-flight projection* on a Claude model is a
-projection, and a tight `usd` cap can admit one more call than you expected. The number printed
-above is **settled** usage — what Anthropic reported — and that one is exact.
+measured **1.49×** (Opus 4.7 / Sonnet 5 / Fable 5 ids) / **1.14×** (Sonnet 4.5 / Haiku 4.5), and no
+scaling factor is applied — a guessed correction would be a different kind of wrong. So a
+*pre-flight projection* on a Claude model is a projection, and a tight `usd` cap can admit one more
+call than you expected. The number printed above is **settled** usage — what Anthropic reported —
+and that one is exact.
 
 Cap with headroom on Claude, or cap on `tokens` and read the projection as advisory.
 
