@@ -15,6 +15,6 @@
     "@cendor/core": "^3.7.0",
     "@cendor/guardrails": "^3.1.1",
     "@cendor/tokenguard": "^3.2.0",
-    "@anthropic-ai/sdk": "^0.115.0"
+    "@anthropic-ai/sdk": "^0.120.0"
   }
 }
