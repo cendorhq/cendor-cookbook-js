@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@cendor/guardrails": "^3.1.1",
-    "@openai/agents": "^0.14.2"
+    "@openai/agents": "^0.19.0"
   }
 }
